@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0d1421">
+<title>TSI Vault — Gestor de Credenciales</title>
+<style>
+:root{
+  --bg:#0d1421; --bg2:#141d2e; --card:#1a2537; --card2:#22304a;
+  --border:#2c3d5c; --text:#e8eef7; --muted:#8fa3c0; --accent:#2f81f7;
+  --accent2:#1f6feb; --green:#3fb950; --yellow:#d29922; --red:#f85149;
+  --radius:12px; --shadow:0 4px 24px rgba(0,0,0,.4);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px}
+button{font-family:inherit;cursor:pointer;border:none;font-size:14px}
+input,select,textarea{font-family:inherit;font-size:15px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+label{display:block;font-size:12.5px;color:var(--muted);margin:12px 0 5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.hidden{display:none!important}
+.btn{background:var(--accent2);color:#fff;padding:11px 18px;border-radius:8px;font-weight:600;transition:opacity .15s}
+.btn:hover{opacity:.88}
+.btn-sec{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+.btn-danger{background:transparent;color:var(--red);border:1px solid var(--red)}
+.btn-sm{padding:6px 11px;font-size:12.5px;border-radius:7px}
+.icon-btn{background:transparent;color:var(--muted);padding:6px;border-radius:6px;font-size:16px}
+.icon-btn:hover{background:var(--card2);color:var(--text)}
+
+/* ===== Pantalla de bloqueo ===== */
+#lockScreen{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 30%,#16233c 0%,var(--bg) 70%);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.lock-card{width:100%;max-width:400px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:34px 28px;box-shadow:var(--shadow);text-align:center}
+.logo{width:64px;height:64px;margin:0 auto 14px;background:linear-gradient(135deg,#2f81f7,#1a4b91);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:30px}
+.lock-card h1{font-size:21px;margin-bottom:2px}
+.lock-card .sub{color:var(--muted);font-size:13px;margin-bottom:22px}
+.strength{height:5px;border-radius:3px;background:var(--bg2);margin-top:8px;overflow:hidden}
+.strength div{height:100%;width:0;transition:all .3s;border-radius:3px}
+#lockMsg{font-size:13px;margin-top:12px;min-height:18px}
+.err{color:var(--red)} .ok-txt{color:var(--green)}
+
+/* ===== App ===== */
+#app{max-width:960px;margin:0 auto;padding:0 14px 90px}
+header{display:flex;align-items:center;gap:10px;padding:16px 2px 12px;position:sticky;top:0;background:var(--bg);z-index:10}
+header .logo{width:38px;height:38px;font-size:19px;margin:0;border-radius:10px}
+header h2{font-size:17px;flex:1}
+header h2 span{display:block;font-size:11px;color:var(--muted);font-weight:400}
+
+/* Dashboard */
+.dash{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:6px 0 14px}
+.dash-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 12px;text-align:center;cursor:pointer;transition:transform .1s}
+.dash-card:active{transform:scale(.97)}
+.dash-card .num{font-size:26px;font-weight:700}
+.dash-card .lbl{font-size:11.5px;color:var(--muted);margin-top:2px}
+.dash-card.sel{outline:2px solid var(--accent)}
+.c-red .num{color:var(--red)} .c-yel .num{color:var(--yellow)} .c-grn .num{color:var(--green)}
+
+#alertBanner{background:linear-gradient(90deg,rgba(248,81,73,.15),rgba(210,153,34,.12));border:1px solid rgba(248,81,73,.4);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;font-size:13.5px;line-height:1.5}
+#alertBanner b{color:var(--red)}
+
+/* Filtros */
+.filters{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.search-row{display:flex;gap:8px;margin-bottom:10px}
+.search-row input{flex:1}
+
+/* Lista */
+.entry{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.entry-head{display:flex;align-items:flex-start;gap:10px}
+.entry-head .info{flex:1;min-width:0}
+.entry-title{font-weight:700;font-size:15.5px;word-break:break-word}
+.entry-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+.b-red{background:rgba(248,81,73,.15);color:var(--red);border:1px solid rgba(248,81,73,.4)}
+.b-yel{background:rgba(210,153,34,.15);color:var(--yellow);border:1px solid rgba(210,153,34,.4)}
+.b-grn{background:rgba(63,185,80,.12);color:var(--green);border:1px solid rgba(63,185,80,.35)}
+.cred-row{display:flex;align-items:center;gap:8px;background:var(--bg2);border-radius:8px;padding:8px 10px;margin-top:8px;font-size:13.5px}
+.cred-row .k{color:var(--muted);font-size:11.5px;min-width:60px;text-transform:uppercase;font-weight:600}
+.cred-row .v{flex:1;font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all}
+.entry-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+
+/* Modal */
+.modal{position:fixed;inset:0;background:rgba(5,10,18,.75);display:flex;align-items:flex-end;justify-content:center;z-index:50;backdrop-filter:blur(3px)}
+.modal-card{background:var(--card);border:1px solid var(--border);border-radius:16px 16px 0 0;width:100%;max-width:640px;max-height:92vh;overflow-y:auto;padding:22px 20px 30px}
+@media(min-width:700px){.modal{align-items:center}.modal-card{border-radius:16px}}
+.modal-card h3{font-size:17px;margin-bottom:4px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+.pw-wrap{display:flex;gap:8px}
+.pw-wrap input{flex:1}
+
+/* Generador */
+.gen-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-top:8px}
+.gen-out{display:flex;gap:8px;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:15px;word-break:break-all}
+.gen-out span{flex:1}
+.gen-opts{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0}
+.gen-opts label{display:flex;align-items:center;gap:6px;margin:0;text-transform:none;font-size:13px;color:var(--text);cursor:pointer}
+.gen-opts input[type=checkbox]{width:auto}
+input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
+
+/* Barra inferior */
+.tabbar{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);display:flex;justify-content:space-around;padding:8px 4px calc(8px + env(safe-area-inset-bottom));z-index:20}
+.tab{background:none;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10.5px;padding:4px 12px;border-radius:8px}
+.tab .ic{font-size:19px}
+.tab.active{color:var(--accent)}
+
+.fab{position:fixed;right:18px;bottom:78px;width:56px;height:56px;border-radius:50%;background:var(--accent2);color:#fff;font-size:26px;box-shadow:0 4px 16px rgba(31,111,235,.5);z-index:21}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:140px;background:#111a2a;border:1px solid var(--border);color:var(--text);padding:10px 18px;border-radius:24px;font-size:13.5px;z-index:99;box-shadow:var(--shadow);white-space:nowrap}
+.empty{text-align:center;color:var(--muted);padding:44px 20px;font-size:14px;line-height:1.7}
+.section-title{font-size:13px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:18px 0 8px}
+.set-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+.set-card h4{font-size:15px;margin-bottom:4px}
+.set-card p{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:10px}
+@media(max-width:480px){.dash .lbl{font-size:10.5px}.filters{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<!-- ============ PANTALLA DE BLOQUEO ============ -->
+<div id="lockScreen">
+  <div class="lock-card">
+    <div class="logo">🛡️</div>
+    <h1>TSI Vault</h1>
+    <div class="sub">Technology &amp; Security Intelligence<br>Gestor cifrado de credenciales</div>
+
+    <!-- Primera vez -->
+    <div id="setupForm" class="hidden">
+      <div style="text-align:left">
+        <label>Crea tu clave maestra</label>
+        <input type="password" id="setupPw" placeholder="Mínimo 10 caracteres" autocomplete="new-password">
+        <div class="strength"><div id="strengthBar"></div></div>
+        <label>Confirma la clave maestra</label>
+        <input type="password" id="setupPw2" autocomplete="new-password">
+      </div>
+      <button class="btn" style="width:100%;margin-top:18px" onclick="doSetup()">Crear bóveda cifrada</button>
+      <div style="margin-top:14px;font-size:12px;color:var(--muted);text-align:left;line-height:1.6">
+        ⚠️ <b>Importante:</b> la clave maestra NO se guarda en ningún lugar y NO se puede recuperar. Si la olvidas, no podrás abrir tus datos. Memorízala bien.
+      </div>
+      <button class="btn-sec btn" style="width:100%;margin-top:12px" onclick="importFromLock()">📂 Restaurar desde archivo .tsi</button>
+    </div>
+
+    <!-- Desbloquear -->
+    <div id="unlockForm" class="hidden">
+      <input type="password" id="unlockPw" placeholder="Clave maestra" autocomplete="current-password" style="text-align:center">
+      <button class="btn" style="width:100%;margin-top:14px" onclick="doUnlock()">🔓 Desbloquear</button>
+      <button class="btn-sec btn" style="width:100%;margin-top:10px" onclick="importFromLock()">📂 Restaurar desde archivo .tsi</button>
+    </div>
+    <div id="lockMsg"></div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="hidden">
+  <header>
+    <div class="logo">🛡️</div>
+    <h2>TSI Vault <span id="entryCount"></span></h2>
+    <button class="icon-btn" title="Bloquear" onclick="lockNow()">🔒</button>
+  </header>
+
+  <!-- ===== VISTA CREDENCIALES ===== -->
+  <div id="viewList">
+    <div class="dash">
+      <div class="dash-card c-red" id="dashRed" onclick="setDashFilter('vencida')"><div class="num" id="numRed">0</div><div class="lbl">Vencidas</div></div>
+      <div class="dash-card c-yel" id="dashYel" onclick="setDashFilter('pronto')"><div class="num" id="numYel">0</div><div class="lbl">Por vencer</div></div>
+      <div class="dash-card c-grn" id="dashGrn" onclick="setDashFilter('ok')"><div class="num" id="numGrn">0</div><div class="lbl">Al día</div></div>
+    </div>
+    <div id="alertBanner" class="hidden"></div>
+    <div class="search-row">
+      <input type="search" id="search" placeholder="🔍 Buscar aplicación, usuario, sede…" oninput="render()">
+    </div>
+    <div class="filters">
+      <select id="fEmpresa" onchange="render()"><option value="">Empresa: todas</option></select>
+      <select id="fCiudad" onchange="render()"><option value="">Ciudad: todas</option></select>
+      <select id="fArea" onchange="render()"><option value="">Área: todas</option></select>
+    </div>
+    <div id="list"></div>
+  </div>
+
+  <!-- ===== VISTA GENERADOR ===== -->
+  <div id="viewGen" class="hidden">
+    <div class="section-title">Generador de contraseñas seguras</div>
+    <div class="gen-box">
+      <div class="gen-out"><span id="genResult">—</span>
+        <button class="icon-btn" onclick="copyText(document.getElementById('genResult').textContent,'Contraseña copiada')">📋</button>
+        <button class="icon-btn" onclick="runGenerator()">🔄</button>
+      </div>
+      <label style="margin-top:14px">Longitud: <span id="genLenLbl">16</span> caracteres</label>
+      <input type="range" id="genLen" min="8" max="40" value="16" oninput="document.getElementById('genLenLbl').textContent=this.value;runGenerator()">
+      <div class="gen-opts">
+        <label><input type="checkbox" id="gU" checked onchange="runGenerator()"> Mayúsculas (A-Z)</label>
+        <label><input type="checkbox" id="gL" checked onchange="runGenerator()"> Minúsculas (a-z)</label>
+        <label><input type="checkbox" id="gN" checked onchange="runGenerator()"> Números (0-9)</label>
+        <label><input type="checkbox" id="gS" checked onchange="runGenerator()"> Símbolos (!@#$%)</label>
+        <label><input type="checkbox" id="gAmb" onchange="runGenerator()"> Evitar ambiguos (l,1,O,0)</label>
+      </div>
+      <button class="btn" style="width:100%" onclick="runGenerator()">⚡ Generar nueva</button>
+    </div>
+    <div class="set-card" style="margin-top:14px">
+      <h4>💡 Recomendación para tus DVR Dahua y paneles de alarma</h4>
+      <p>Muchos DVR antiguos limitan la contraseña a 8–32 caracteres y algunos no aceptan símbolos. Si un equipo rechaza la clave, desactiva "Símbolos" y genera de nuevo. Usa siempre una contraseña distinta por equipo.</p>
+    </div>
+  </div>
+
+  <!-- ===== VISTA AJUSTES ===== -->
+  <div id="viewSettings" class="hidden">
+    <div class="section-title">Respaldo en la nube (Google Drive / OneDrive)</div>
+    <div class="set-card">
+      <h4>📤 Exportar bóveda cifrada</h4>
+      <p>Descarga un archivo <b>.tsi</b> cifrado con AES-256. Súbelo a tu Google Drive u OneDrive. Sin tu clave maestra, el archivo es ilegible para cualquiera.</p>
+      <button class="btn" onclick="exportVault()">Exportar archivo .tsi</button>
+    </div>
+    <div class="set-card">
+      <h4>📥 Importar / restaurar</h4>
+      <p>Abre un archivo .tsi desde Drive en otro dispositivo. Reemplaza los datos actuales de este dispositivo.</p>
+      <button class="btn btn-sec" onclick="document.getElementById('importFile').click()">Seleccionar archivo .tsi</button>
+      <input type="file" id="importFile" accept=".tsi,.json" class="hidden" onchange="importVault(this.files[0])">
+    </div>
+
+    <div class="section-title">Alertas</div>
+    <div class="set-card">
+      <h4>🔔 Notificaciones del navegador</h4>
+      <p>Recibe una notificación al abrir la app cuando haya credenciales vencidas o por vencer.</p>
+      <button class="btn btn-sec" id="notifBtn" onclick="askNotif()">Activar notificaciones</button>
+    </div>
+    <div class="set-card">
+      <h4>⏱️ Valores por defecto</h4>
+      <label>Cambiar credenciales cada (días)</label>
+      <input type="number" id="setRotation" min="1" value="30" onchange="saveSettings()">
+      <label>Avisarme con anticipación (días)</label>
+      <input type="number" id="setWarn" min="1" value="5" onchange="saveSettings()">
+      <label>Bloqueo automático por inactividad (minutos)</label>
+      <input type="number" id="setAutolock" min="1" value="5" onchange="saveSettings()">
+    </div>
+
+    <div class="section-title">Seguridad</div>
+    <div class="set-card">
+      <h4>🔑 Cambiar clave maestra</h4>
+      <label>Clave maestra actual</label>
+      <input type="password" id="chOld" autocomplete="current-password">
+      <label>Nueva clave maestra</label>
+      <input type="password" id="chNew" autocomplete="new-password">
+      <label>Confirmar nueva clave</label>
+      <input type="password" id="chNew2" autocomplete="new-password">
+      <button class="btn" style="margin-top:12px" onclick="changeMaster()">Cambiar clave</button>
+    </div>
+    <div class="set-card">
+      <h4 style="color:var(--red)">🗑️ Borrar todo en este dispositivo</h4>
+      <p>Elimina la bóveda de este navegador. Exporta primero tu respaldo .tsi.</p>
+      <button class="btn-danger btn" onclick="wipeAll()">Borrar bóveda local</button>
+    </div>
+    <p style="text-align:center;color:var(--muted);font-size:11.5px;margin:18px 0">TSI Vault v1.0 · Cifrado AES-256-GCM · PBKDF2 310.000 iteraciones<br>Los datos nunca salen de tu dispositivo sin cifrar.</p>
+  </div>
+
+  <button class="fab" id="fab" onclick="openEditor()">＋</button>
+
+  <div class="tabbar">
+    <button class="tab active" id="tabList" onclick="showView('List')"><span class="ic">🗂️</span>Credenciales</button>
+    <button class="tab" id="tabGen" onclick="showView('Gen')"><span class="ic">⚡</span>Generador</button>
+    <button class="tab" id="tabSettings" onclick="showView('Settings')"><span class="ic">⚙️</span>Ajustes</button>
+  </div>
+</div>
+
+<!-- ===== MODAL EDITOR ===== -->
+<div class="modal hidden" id="editorModal">
+  <div class="modal-card">
+    <h3 id="editorTitle">Nueva credencial</h3>
+    <p style="font-size:12.5px;color:var(--muted)">Organiza por empresa, ciudad y área para encontrarla rápido.</p>
+    <div class="row2">
+      <div><label>Empresa *</label><input id="eEmpresa" list="dlEmpresa" placeholder="Ej: Manufactura S.A."><datalist id="dlEmpresa"></datalist></div>
+      <div><label>Ciudad *</label><input id="eCiudad" list="dlCiudad" placeholder="Ej: Bogotá"><datalist id="dlCiudad"></datalist></div>
+    </div>
+    <div class="row2">
+      <div><label>Área / Sede</label><input id="eArea" list="dlArea" placeholder="Ej: CCTV, Alarmas, Sede Norte"><datalist id="dlArea"></datalist></div>
+      <div><label>Aplicación / Equipo *</label><input id="eApp" placeholder="Ej: PSS Smart Lite — DVR 01"></div>
+    </div>
+    <label>Usuario</label>
+    <input id="eUser" placeholder="admin" autocomplete="off">
+    <label>Contraseña</label>
+    <div class="pw-wrap">
+      <input id="ePass" type="password" autocomplete="new-password">
+      <button class="btn-sec btn" type="button" onclick="togglePw('ePass',this)">👁️</button>
+      <button class="btn-sec btn" type="button" title="Generar" onclick="genInto()">⚡</button>
+    </div>
+    <label>URL / IP (opcional)</label>
+    <input id="eUrl" placeholder="Ej: 192.168.1.108 o https://…" autocomplete="off">
+    <div class="row2">
+      <div><label>Cambiar cada (días)</label><input id="eRotation" type="number" min="1"></div>
+      <div><label>Avisar antes (días)</label><input id="eWarn" type="number" min="1"></div>
+    </div>
+    <label>Último cambio de contraseña</label>
+    <input id="eLastChanged" type="date">
+    <label>Notas (opcional)</label>
+    <textarea id="eNotas" rows="2" placeholder="Ej: puerto 37777, canal 16"></textarea>
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button class="btn btn-sec" style="flex:1" onclick="closeEditor()">Cancelar</button>
+      <button class="btn" style="flex:1" onclick="saveEntry()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ================================================================
+   TSI Vault — Gestor cifrado de credenciales
+   Cifrado: AES-256-GCM · Derivación: PBKDF2-SHA256 (310.000 iter.)
+   ================================================================ */
+const LS_KEY = 'tsi_vault_v1';
+const PBKDF2_ITER = 310000;
+let vault = null;        // datos descifrados en memoria
+let masterPw = null;     // clave maestra en memoria (solo sesión)
+let editingId = null;
+let dashFilter = '';
+let lockTimer = null;
+
+/* ---------- Utilidades cripto ---------- */
+const enc = new TextEncoder(), dec = new TextDecoder();
+const b64 = a => btoa(String.fromCharCode(...new Uint8Array(a)));
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+async function deriveKey(password, salt){
+  const base = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2', salt, iterations:PBKDF2_ITER, hash:'SHA-256'},
+    base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
+}
+async function encryptVault(obj, password){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(password, salt);
+  const data = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(JSON.stringify(obj)));
+  return {app:'TSI-Vault', v:1, kdf:'PBKDF2-SHA256', iter:PBKDF2_ITER,
+          salt:b64(salt), iv:b64(iv), data:b64(data)};
+}
+async function decryptVault(blob, password){
+  const key = await deriveKey(password, unb64(blob.salt));
+  const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(blob.iv)}, key, unb64(blob.data));
+  return JSON.parse(dec.decode(plain));
+}
+
+/* ---------- Persistencia ---------- */
+async function persist(){
+  if(!vault || !masterPw) return;
+  vault.updatedAt = new Date().toISOString();
+  const blob = await encryptVault(vault, masterPw);
+  localStorage.setItem(LS_KEY, JSON.stringify(blob));
+}
+function newVault(){
+  return {version:1, createdAt:new Date().toISOString(),
+    settings:{rotationDays:30, warnDays:5, autolockMin:5}, entries:[]};
+}
+
+/* ---------- Bloqueo / desbloqueo ---------- */
+function initLock(){
+  const has = !!localStorage.getItem(LS_KEY);
+  document.getElementById('setupForm').classList.toggle('hidden', has);
+  document.getElementById('unlockForm').classList.toggle('hidden', !has);
+  setTimeout(()=>document.getElementById(has?'unlockPw':'setupPw').focus(), 200);
+}
+function lockMsg(t, cls){ const m=document.getElementById('lockMsg'); m.textContent=t; m.className=cls||''; }
+
+async function doSetup(){
+  const p1 = document.getElementById('setupPw').value, p2 = document.getElementById('setupPw2').value;
+  if(p1.length < 10) return lockMsg('La clave debe tener mínimo 10 caracteres.','err');
+  if(p1 !== p2) return lockMsg('Las claves no coinciden.','err');
+  masterPw = p1; vault = newVault();
+  await persist();
+  enterApp();
+}
+async function doUnlock(){
+  const p = document.getElementById('unlockPw').value;
+  if(!p) return;
+  lockMsg('Descifrando…');
+  try{
+    const blob = JSON.parse(localStorage.getItem(LS_KEY));
+    vault = await decryptVault(blob, p);
+    masterPw = p;
+    document.getElementById('unlockPw').value='';
+    enterApp();
+  }catch(e){ lockMsg('❌ Clave incorrecta o datos dañados.','err'); }
+}
+function importFromLock(){
+  const inp = document.createElement('input');
+  inp.type='file'; inp.accept='.tsi,.json';
+  inp.onchange = async ()=>{
+    const f = inp.files[0]; if(!f) return;
+    const pw = prompt('Clave maestra del archivo .tsi:');
+    if(!pw) return;
+    try{
+      const blob = JSON.parse(await f.text());
+      vault = await decryptVault(blob, pw);
+      masterPw = pw; await persist(); enterApp();
+    }catch(e){ lockMsg('❌ No se pudo descifrar el archivo. Verifica la clave.','err'); }
+  };
+  inp.click();
+}
+function lockNow(){
+  vault=null; masterPw=null;
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('lockScreen').classList.remove('hidden');
+  lockMsg('');
+  initLock();
+}
+function resetLockTimer(){
+  clearTimeout(lockTimer);
+  if(!vault) return;
+  const min = (vault.settings.autolockMin||5);
+  lockTimer = setTimeout(()=>{ if(vault){ lockNow(); } }, min*60000);
+}
+['click','keydown','touchstart','scroll'].forEach(ev=>document.addEventListener(ev, resetLockTimer, {passive:true}));
+
+/* Medidor de fuerza */
+document.addEventListener('input', e=>{
+  if(e.target.id!=='setupPw') return;
+  const v=e.target.value; let s=0;
+  if(v.length>=10)s++; if(v.length>=14)s++; if(/[A-Z]/.test(v)&&/[a-z]/.test(v))s++;
+  if(/\d/.test(v))s++; if(/[^A-Za-z0-9]/.test(v))s++;
+  const bar=document.getElementById('strengthBar');
+  const pct=[0,20,40,60,80,100][s], col=['#f85149','#f85149','#d29922','#d29922','#3fb950','#3fb950'][s];
+  bar.style.width=pct+'%'; bar.style.background=col;
+});
+
+function enterApp(){
+  document.getElementById('lockScreen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  loadSettingsUI(); render(); resetLockTimer(); checkNotify();
+}
+
+/* ---------- Vencimientos ---------- */
+function daysLeft(e){
+  const rot = e.rotationDays || vault.settings.rotationDays || 30;
+  const last = new Date(e.lastChanged || e.createdAt);
+  const elapsed = Math.floor((Date.now() - last.getTime())/86400000);
+  return rot - elapsed;
+}
+function statusOf(e){
+  const d = daysLeft(e);
+  const warn = e.warnDays || vault.settings.warnDays || 5;
+  if(d <= 0) return 'vencida';
+  if(d <= warn) return 'pronto';
+  return 'ok';
+}
+
+/* ---------- Render ---------- */
+function esc(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function refreshFilters(){
+  const sets = {fEmpresa:new Set(), fCiudad:new Set(), fArea:new Set()};
+  vault.entries.forEach(e=>{ if(e.empresa)sets.fEmpresa.add(e.empresa); if(e.ciudad)sets.fCiudad.add(e.ciudad); if(e.area)sets.fArea.add(e.area); });
+  const labels = {fEmpresa:'Empresa: todas', fCiudad:'Ciudad: todas', fArea:'Área: todas'};
+  for(const id in sets){
+    const sel = document.getElementById(id), cur = sel.value;
+    sel.innerHTML = `<option value="">${labels[id]}</option>` +
+      [...sets[id]].sort().map(v=>`<option${v===cur?' selected':''}>${esc(v)}</option>`).join('');
+  }
+  // datalists del editor
+  document.getElementById('dlEmpresa').innerHTML=[...sets.fEmpresa].map(v=>`<option value="${esc(v)}">`).join('');
+  document.getElementById('dlCiudad').innerHTML=[...sets.fCiudad].map(v=>`<option value="${esc(v)}">`).join('');
+  document.getElementById('dlArea').innerHTML=[...sets.fArea].map(v=>`<option value="${esc(v)}">`).join('');
+}
+
+function setDashFilter(s){
+  dashFilter = (dashFilter===s)?'':s;
+  render();
+}
+
+function render(){
+  if(!vault) return;
+  refreshFilters();
+  const q = (document.getElementById('search').value||'').toLowerCase();
+  const fE = document.getElementById('fEmpresa').value;
+  const fC = document.getElementById('fCiudad').value;
+  const fA = document.getElementById('fArea').value;
+
+  let red=0, yel=0, grn=0;
+  vault.entries.forEach(e=>{ const s=statusOf(e); if(s==='vencida')red++; else if(s==='pronto')yel++; else grn++; });
+  document.getElementById('numRed').textContent=red;
+  document.getElementById('numYel').textContent=yel;
+  document.getElementById('numGrn').textContent=grn;
+  document.getElementById('entryCount').textContent = vault.entries.length + ' credenciales · ' + (vault.updatedAt? 'act. '+new Date(vault.updatedAt).toLocaleDateString('es-CO') : '');
+  ['dashRed','dashYel','dashGrn'].forEach((id,i)=>{
+    document.getElementById(id).classList.toggle('sel', dashFilter===['vencida','pronto','ok'][i]);
+  });
+
+  // Banner de alertas
+  const banner = document.getElementById('alertBanner');
+  const urgent = vault.entries.filter(e=>statusOf(e)!=='ok')
+    .sort((a,b)=>daysLeft(a)-daysLeft(b)).slice(0,4);
+  if(urgent.length){
+    banner.classList.remove('hidden');
+    banner.innerHTML = '⚠️ <b>Atención:</b> ' + urgent.map(e=>{
+      const d=daysLeft(e);
+      return `<b>${esc(e.aplicacion)}</b> (${esc(e.area||e.ciudad||'')}) ${d<=0? 'venció hace '+(-d)+' día(s)' : 'vence en '+d+' día(s)'}`;
+    }).join(' · ') + (red+yel>4? ` · y ${red+yel-4} más…`:'');
+  } else banner.classList.add('hidden');
+
+  // Lista
+  let items = vault.entries.filter(e=>{
+    if(fE && e.empresa!==fE) return false;
+    if(fC && e.ciudad!==fC) return false;
+    if(fA && e.area!==fA) return false;
+    if(dashFilter && statusOf(e)!==dashFilter) return false;
+    if(q){
+      const hay = [e.empresa,e.ciudad,e.area,e.aplicacion,e.usuario,e.url,e.notas].join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  }).sort((a,b)=>daysLeft(a)-daysLeft(b));
+
+  const list = document.getElementById('list');
+  if(!items.length){
+    list.innerHTML = `<div class="empty">${vault.entries.length? 'Sin resultados con estos filtros.' : 'Aún no hay credenciales.<br>Toca <b>＋</b> para agregar la primera.<br><br>Ejemplo: PSS Smart Lite — DVR Sede Norte'}</div>`;
+    return;
+  }
+  list.innerHTML = items.map(e=>{
+    const s = statusOf(e), d = daysLeft(e);
+    const badge = s==='vencida' ? `<span class="badge b-red">🔴 Vencida ${d<0? '('+(-d)+' d)':''}</span>`
+              : s==='pronto'  ? `<span class="badge b-yel">🟡 ${d} día(s)</span>`
+              : `<span class="badge b-grn">🟢 ${d} días</span>`;
+    return `<div class="entry">
+      <div class="entry-head">
+        <div class="info">
+          <div class="entry-title">${esc(e.aplicacion)}</div>
+          <div class="entry-meta">🏢 ${esc(e.empresa)} · 📍 ${esc(e.ciudad)}${e.area? ' · '+esc(e.area):''}${e.url? ' · '+esc(e.url):''}</div>
+        </div>
+        ${badge}
+      </div>
+      <div class="cred-row"><span class="k">Usuario</span><span class="v">${esc(e.usuario)||'—'}</span>
+        <button class="icon-btn" onclick="copyEntry('${e.id}','usuario')">📋</button></div>
+      <div class="cred-row"><span class="k">Clave</span><span class="v" id="pw-${e.id}">••••••••</span>
+        <button class="icon-btn" onclick="revealPw('${e.id}',this)">👁️</button>
+        <button class="icon-btn" onclick="copyEntry('${e.id}','password')">📋</button></div>
+      ${e.notas? `<div class="entry-meta" style="margin-top:8px">📝 ${esc(e.notas)}</div>`:''}
+      <div class="entry-actions">
+        <button class="btn btn-sec btn-sm" onclick="markChanged('${e.id}')">✅ Ya la cambié hoy</button>
+        <button class="btn btn-sec btn-sm" onclick="openEditor('${e.id}')">✏️ Editar</button>
+        <button class="btn-danger btn btn-sm" onclick="delEntry('${e.id}')">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function findEntry(id){ return vault.entries.find(e=>e.id===id); }
+
+function revealPw(id, btn){
+  const el = document.getElementById('pw-'+id), e = findEntry(id);
+  const shown = el.dataset.shown==='1';
+  el.textContent = shown? '••••••••' : e.password;
+  el.dataset.shown = shown? '0':'1';
+  btn.textContent = shown? '👁️':'🙈';
+  if(!shown) setTimeout(()=>{ if(el.dataset.shown==='1'){ el.textContent='••••••••'; el.dataset.shown='0'; btn.textContent='👁️'; } }, 15000);
+}
+function copyEntry(id, field){
+  const e = findEntry(id);
+  copyText(e[field]||'', field==='password'? 'Contraseña copiada (se borra del portapapeles en 30 s)':'Usuario copiado');
+  if(field==='password') setTimeout(()=>{ navigator.clipboard.writeText('').catch(()=>{}); }, 30000);
+}
+async function copyText(t, msg){
+  try{ await navigator.clipboard.writeText(t); toast(msg||'Copiado'); }
+  catch(e){ toast('No se pudo copiar'); }
+}
+async function markChanged(id){
+  const e = findEntry(id);
+  e.lastChanged = new Date().toISOString();
+  await persist(); render(); toast('✅ Fecha de cambio actualizada');
+}
+async function delEntry(id){
+  const e = findEntry(id);
+  if(!confirm(`¿Eliminar "${e.aplicacion}"?`)) return;
+  vault.entries = vault.entries.filter(x=>x.id!==id);
+  await persist(); render(); toast('Eliminada');
+}
+
+/* ---------- Editor ---------- */
+function openEditor(id){
+  editingId = id||null;
+  const e = id? findEntry(id) : null;
+  document.getElementById('editorTitle').textContent = e? 'Editar credencial':'Nueva credencial';
+  document.getElementById('eEmpresa').value = e?.empresa||document.getElementById('fEmpresa').value||'';
+  document.getElementById('eCiudad').value = e?.ciudad||document.getElementById('fCiudad').value||'';
+  document.getElementById('eArea').value = e?.area||document.getElementById('fArea').value||'';
+  document.getElementById('eApp').value = e?.aplicacion||'';
+  document.getElementById('eUser').value = e?.usuario||'';
+  document.getElementById('ePass').value = e?.password||'';
+  document.getElementById('ePass').type='password';
+  document.getElementById('eUrl').value = e?.url||'';
+  document.getElementById('eRotation').value = e?.rotationDays||vault.settings.rotationDays||30;
+  document.getElementById('eWarn').value = e?.warnDays||vault.settings.warnDays||5;
+  document.getElementById('eLastChanged').value = (e?.lastChanged||new Date().toISOString()).slice(0,10);
+  document.getElementById('eNotas').value = e?.notas||'';
+  document.getElementById('editorModal').classList.remove('hidden');
+}
+function closeEditor(){ document.getElementById('editorModal').classList.add('hidden'); }
+function togglePw(id, btn){
+  const i = document.getElementById(id);
+  i.type = i.type==='password'? 'text':'password';
+  btn.textContent = i.type==='password'? '👁️':'🙈';
+}
+function genInto(){
+  document.getElementById('ePass').value = generatePassword(16, true, true, true, true, false);
+  document.getElementById('ePass').type='text';
+}
+async function saveEntry(){
+  const g = id=>document.getElementById(id).value.trim();
+  if(!g('eEmpresa')||!g('eCiudad')||!g('eApp')) return toast('⚠️ Empresa, ciudad y aplicación son obligatorios');
+  const data = {
+    empresa:g('eEmpresa'), ciudad:g('eCiudad'), area:g('eArea'), aplicacion:g('eApp'),
+    usuario:g('eUser'), password:document.getElementById('ePass').value, url:g('eUrl'),
+    rotationDays:parseInt(g('eRotation'))||30, warnDays:parseInt(g('eWarn'))||5,
+    lastChanged:new Date(g('eLastChanged')+'T12:00:00').toISOString(), notas:g('eNotas')
+  };
+  if(editingId){ Object.assign(findEntry(editingId), data); }
+  else { vault.entries.push({id:crypto.randomUUID(), createdAt:new Date().toISOString(), ...data}); }
+  await persist(); closeEditor(); render(); toast('💾 Guardado');
+}
+
+/* ---------- Generador ---------- */
+function generatePassword(len, up, lo, num, sym, noAmb){
+  let U='ABCDEFGHIJKLMNOPQRSTUVWXYZ', L='abcdefghijklmnopqrstuvwxyz', N='0123456789', S='!@#$%&*+-_=?';
+  if(noAmb){ U=U.replace(/[OI]/g,''); L=L.replace(/[l]/g,''); N=N.replace(/[01]/g,''); }
+  const sets=[]; if(up)sets.push(U); if(lo)sets.push(L); if(num)sets.push(N); if(sym)sets.push(S);
+  if(!sets.length) sets.push(L);
+  const all = sets.join('');
+  const rand = m=>{ const a=new Uint32Array(1); crypto.getRandomValues(a); return a[0]%m; };
+  const chars = [];
+  sets.forEach(s=>chars.push(s[rand(s.length)]));       // garantiza uno de cada tipo
+  while(chars.length<len) chars.push(all[rand(all.length)]);
+  for(let i=chars.length-1;i>0;i--){ const j=rand(i+1); [chars[i],chars[j]]=[chars[j],chars[i]]; } // mezclar
+  return chars.slice(0,len).join('');
+}
+function runGenerator(){
+  const v = id=>document.getElementById(id).checked;
+  const len = parseInt(document.getElementById('genLen').value);
+  document.getElementById('genResult').textContent =
+    generatePassword(len, v('gU'), v('gL'), v('gN'), v('gS'), v('gAmb'));
+}
+
+/* ---------- Exportar / Importar ---------- */
+async function exportVault(){
+  const blob = await encryptVault(vault, masterPw);
+  const f = new Blob([JSON.stringify(blob)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(f);
+  a.download = 'TSI-Vault-'+new Date().toISOString().slice(0,10)+'.tsi';
+  a.click(); URL.revokeObjectURL(a.href);
+  toast('📤 Archivo exportado. Súbelo a tu Drive.');
+}
+async function importVault(file){
+  if(!file) return;
+  const pw = prompt('Clave maestra del archivo:');
+  if(!pw) return;
+  try{
+    const blob = JSON.parse(await file.text());
+    const v = await decryptVault(blob, pw);
+    if(!confirm(`El archivo contiene ${v.entries.length} credenciales.\n¿Reemplazar los datos de este dispositivo?`)) return;
+    vault = v; masterPw = pw;
+    await persist(); loadSettingsUI(); render(); toast('📥 Bóveda restaurada');
+  }catch(e){ toast('❌ Clave incorrecta o archivo inválido'); }
+  document.getElementById('importFile').value='';
+}
+
+/* ---------- Ajustes ---------- */
+function loadSettingsUI(){
+  document.getElementById('setRotation').value = vault.settings.rotationDays||30;
+  document.getElementById('setWarn').value = vault.settings.warnDays||5;
+  document.getElementById('setAutolock').value = vault.settings.autolockMin||5;
+  updateNotifBtn();
+}
+async function saveSettings(){
+  vault.settings.rotationDays = parseInt(document.getElementById('setRotation').value)||30;
+  vault.settings.warnDays = parseInt(document.getElementById('setWarn').value)||5;
+  vault.settings.autolockMin = parseInt(document.getElementById('setAutolock').value)||5;
+  await persist(); render(); resetLockTimer();
+}
+async function changeMaster(){
+  const o=document.getElementById('chOld').value, n=document.getElementById('chNew').value, n2=document.getElementById('chNew2').value;
+  if(o!==masterPw) return toast('❌ Clave actual incorrecta');
+  if(n.length<10) return toast('⚠️ Mínimo 10 caracteres');
+  if(n!==n2) return toast('⚠️ Las claves nuevas no coinciden');
+  masterPw = n; await persist();
+  ['chOld','chNew','chNew2'].forEach(id=>document.getElementById(id).value='');
+  toast('🔑 Clave maestra actualizada. Exporta un nuevo respaldo .tsi.');
+}
+function wipeAll(){
+  if(!confirm('¿Seguro? Se borrará TODO en este dispositivo.')) return;
+  if(!confirm('Última confirmación: ¿ya exportaste tu respaldo .tsi?')) return;
+  localStorage.removeItem(LS_KEY); location.reload();
+}
+
+/* ---------- Notificaciones ---------- */
+function updateNotifBtn(){
+  const b = document.getElementById('notifBtn');
+  if(!('Notification' in window)){ b.textContent='No disponible en este navegador'; b.disabled=true; return; }
+  b.textContent = Notification.permission==='granted' ? '✅ Notificaciones activas' : 'Activar notificaciones';
+}
+async function askNotif(){
+  if(!('Notification' in window)) return;
+  await Notification.requestPermission();
+  updateNotifBtn(); checkNotify();
+}
+function checkNotify(){
+  if(!('Notification' in window) || Notification.permission!=='granted' || !vault) return;
+  const due = vault.entries.filter(e=>statusOf(e)!=='ok');
+  if(!due.length) return;
+  const exp = due.filter(e=>statusOf(e)==='vencida').length;
+  const soon = due.length-exp;
+  let body = '';
+  if(exp) body += `🔴 ${exp} credencial(es) VENCIDAS. `;
+  if(soon) body += `🟡 ${soon} por vencer pronto.`;
+  try{ new Notification('TSI Vault — Cambio de credenciales', {body, tag:'tsi-due'}); }catch(e){}
+}
+
+/* ---------- Vistas ---------- */
+function showView(v){
+  ['List','Gen','Settings'].forEach(x=>{
+    document.getElementById('view'+x).classList.toggle('hidden', x!==v);
+    document.getElementById('tab'+x).classList.toggle('active', x===v);
+  });
+  document.getElementById('fab').classList.toggle('hidden', v!=='List');
+  if(v==='Gen' && document.getElementById('genResult').textContent==='—') runGenerator();
+}
+
+/* ---------- Toast ---------- */
+let toastT=null;
+function toast(msg){
+  document.querySelectorAll('.toast').forEach(t=>t.remove());
+  const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  document.body.appendChild(t);
+  clearTimeout(toastT); toastT=setTimeout(()=>t.remove(), 2600);
+}
+
+/* Enter para desbloquear */
+document.addEventListener('keydown', e=>{
+  if(e.key!=='Enter') return;
+  if(!document.getElementById('unlockForm').classList.contains('hidden') &&
+     !document.getElementById('lockScreen').classList.contains('hidden')) doUnlock();
+});
+
+initLock();
+</script>
+</body>
+</html>
