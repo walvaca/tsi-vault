@@ -74,6 +74,18 @@ header h2 span{display:block;font-size:11px;color:var(--muted);font-weight:400}
 .swatches{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px}
 .swatch{width:36px;height:36px;border-radius:50%;border:2px solid var(--border);cursor:pointer}
 .swatch.sel{outline:3px solid var(--accent);outline-offset:2px}
+
+/* Menú Más */
+.menu-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;overflow:hidden}
+.menu-title{font-size:12.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:13px 16px 7px}
+.menu-row{display:flex;align-items:center;gap:12px;padding:14px 16px;border-top:1px solid var(--border);cursor:pointer;font-size:15px;user-select:none}
+.menu-row:active{background:var(--card2)}
+.menu-row .arr{margin-left:auto;color:var(--muted);font-size:17px}
+.sec-head{display:flex;align-items:center;gap:6px;color:var(--accent);font-weight:600;font-size:14.5px;padding:6px 0 12px;cursor:pointer;user-select:none}
+
+/* Actividad */
+.act-row{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 13px;margin-bottom:8px;font-size:13.5px;display:flex;gap:12px;align-items:baseline}
+.act-time{color:var(--muted);font-size:11.5px;white-space:nowrap;flex-shrink:0}
 .entry-head{display:flex;align-items:flex-start;gap:10px}
 .entry-head .info{flex:1;min-width:0}
 .entry-title{font-weight:700;font-size:15.5px;word-break:break-word}
@@ -211,11 +223,70 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
     </div>
   </div>
 
-  <!-- ===== VISTA AJUSTES ===== -->
+  <!-- ===== VISTA ACTIVIDAD ===== -->
+  <div id="viewAct" class="hidden">
+    <div class="section-title">Actividad reciente</div>
+    <div id="actList"></div>
+  </div>
+
+  <!-- ===== VISTA MÁS ===== -->
   <div id="viewSettings" class="hidden">
 
-    <div class="group-head" onclick="toggleAcc('accLook')"><span class="chev" id="ch-accLook">▸</span>🎨 Apariencia</div>
-    <div id="accLook" class="hidden">
+    <div id="moreMenu">
+      <div class="menu-card">
+        <div class="menu-title">Cuenta</div>
+        <div class="menu-row" onclick="openSection('secProfile')">👤 Mi cuenta<span class="arr">›</span></div>
+        <div class="menu-row" onclick="openSection('secReport')">📊 Informes<span class="arr">›</span></div>
+      </div>
+      <div class="menu-card">
+        <div class="menu-title">Configuración</div>
+        <div class="menu-row" onclick="openSection('secLook')">🎨 Apariencia<span class="arr">›</span></div>
+        <div class="menu-row" onclick="openSection('secSync')">☁️ Sincronización automática<span class="arr">›</span></div>
+        <div class="menu-row" onclick="openSection('secBackup')">💾 Respaldo manual (.tsi)<span class="arr">›</span></div>
+        <div class="menu-row" onclick="openSection('secAlerts')">🔔 Alertas y tiempos<span class="arr">›</span></div>
+        <div class="menu-row" onclick="openSection('secSec')">🔐 Seguridad<span class="arr">›</span></div>
+      </div>
+      <div class="menu-card">
+        <div class="menu-title">Acerca de</div>
+        <div class="menu-row" onclick="openSection('secAbout')">ℹ️ TSI Vault<span class="arr">›</span></div>
+      </div>
+    </div>
+
+    <div id="secProfile" class="hidden">
+      <div class="sec-head" onclick="backToMenu()">‹ Volver</div>
+      <div class="set-card">
+        <h4>👤 Mi cuenta</h4>
+        <p>Datos del responsable de estas credenciales. Se guardan cifrados y se usan como membrete de los informes.</p>
+        <label>Nombre completo</label><input id="pfNombre" autocomplete="off">
+        <label>Cargo</label><input id="pfCargo" placeholder="Ej: Jefe de Seguridad Física" autocomplete="off">
+        <label>Empresa</label><input id="pfEmpresa" autocomplete="off">
+        <label>Teléfono</label><input id="pfTel" autocomplete="off">
+        <label>Correo</label><input id="pfMail" autocomplete="off">
+        <button class="btn" style="margin-top:14px" onclick="saveProfile()">💾 Guardar perfil</button>
+      </div>
+    </div>
+
+    <div id="secReport" class="hidden">
+      <div class="sec-head" onclick="backToMenu()">‹ Volver</div>
+      <div class="set-card">
+        <h4>📊 Informe de credenciales y vencimientos</h4>
+        <p>Genera un informe imprimible con el estado de todas las credenciales, encabezado con tus datos de "Mi cuenta". <b>No incluye contraseñas.</b> En la ventana que se abre, usa el botón Imprimir para guardarlo como PDF.</p>
+        <button class="btn" onclick="genReport()">Generar informe</button>
+      </div>
+    </div>
+
+    <div id="secAbout" class="hidden">
+      <div class="sec-head" onclick="backToMenu()">‹ Volver</div>
+      <div class="set-card" style="text-align:center">
+        <div class="logo" style="margin:0 auto 12px">🛡️</div>
+        <h4>TSI Vault <span id="aboutVer">v1.5</span></h4>
+        <p style="margin-top:8px">Gestor cifrado de credenciales de seguridad<br><b>TSI — Technology &amp; Security Intelligence</b><br>Bogotá, Colombia</p>
+        <p style="font-size:11.5px;margin-bottom:0">AES-256-GCM · PBKDF2 310.000 iteraciones<br>Sincronización Google Drive · Biometría (WebAuthn PRF)<br>Tus datos nunca salen de tus dispositivos sin cifrar.</p>
+      </div>
+    </div>
+
+    <div id="secLook" class="hidden">
+      <div class="sec-head" onclick="backToMenu()">‹ Volver</div>
       <div class="set-card">
         <h4>Tema de color</h4>
         <div class="swatches">
@@ -241,8 +312,8 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
       </div>
     </div>
 
-    <div class="group-head" onclick="toggleAcc('accSync')"><span class="chev" id="ch-accSync">▸</span>☁️ Sincronización automática</div>
-    <div id="accSync" class="hidden">
+    <div id="secSync" class="hidden">
+      <div class="sec-head" onclick="backToMenu()">‹ Volver</div>
     <div class="set-card">
       <h4>☁️ Google Drive</h4>
       <p id="driveStatus">No configurado. Pega tu ID de cliente OAuth (se crea una sola vez en Google Cloud Console).</p>
@@ -257,8 +328,8 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
 
     </div>
 
-    <div class="group-head" onclick="toggleAcc('accBackup')"><span class="chev" id="ch-accBackup">▸</span>💾 Respaldo manual (archivo .tsi)</div>
-    <div id="accBackup" class="hidden">
+    <div id="secBackup" class="hidden">
+      <div class="sec-head" onclick="backToMenu()">‹ Volver</div>
     <div class="set-card">
       <h4>📤 Exportar bóveda cifrada</h4>
       <p>Descarga un archivo <b>.tsi</b> cifrado con AES-256. Súbelo a tu Google Drive u OneDrive. Sin tu clave maestra, el archivo es ilegible para cualquiera.</p>
@@ -273,8 +344,8 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
 
     </div>
 
-    <div class="group-head" onclick="toggleAcc('accAlerts')"><span class="chev" id="ch-accAlerts">▸</span>🔔 Alertas y tiempos</div>
-    <div id="accAlerts" class="hidden">
+    <div id="secAlerts" class="hidden">
+      <div class="sec-head" onclick="backToMenu()">‹ Volver</div>
     <div class="set-card">
       <h4>🔔 Notificaciones del navegador</h4>
       <p>Recibe una notificación al abrir la app cuando haya credenciales vencidas o por vencer.</p>
@@ -292,8 +363,8 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
 
     </div>
 
-    <div class="group-head" onclick="toggleAcc('accSec')"><span class="chev" id="ch-accSec">▸</span>🔐 Seguridad</div>
-    <div id="accSec" class="hidden">
+    <div id="secSec" class="hidden">
+      <div class="sec-head" onclick="backToMenu()">‹ Volver</div>
     <div class="set-card">
       <h4>🖐️ Desbloqueo con huella</h4>
       <p>Usa la biometría de este dispositivo (huella o rostro) para desbloquear sin escribir la clave maestra. Se configura por dispositivo — actívala en el celular y en el PC por separado.</p>
@@ -315,7 +386,6 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
       <button class="btn-danger btn" onclick="wipeAll()">Borrar bóveda local</button>
     </div>
     </div>
-    <p style="text-align:center;color:var(--muted);font-size:11.5px;margin:18px 0">TSI Vault v1.4 · Cifrado AES-256-GCM · PBKDF2 310.000 iteraciones · Sync Drive · Huella<br>Los datos nunca salen de tu dispositivo sin cifrar.</p>
   </div>
 
   <button class="fab" id="fab" onclick="openEditor()">＋</button>
@@ -323,7 +393,8 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
   <div class="tabbar">
     <button class="tab active" id="tabList" onclick="showView('List')"><span class="ic">🗂️</span>Credenciales</button>
     <button class="tab" id="tabGen" onclick="showView('Gen')"><span class="ic">⚡</span>Generador</button>
-    <button class="tab" id="tabSettings" onclick="showView('Settings')"><span class="ic">⚙️</span>Ajustes</button>
+    <button class="tab" id="tabAct" onclick="showView('Act')"><span class="ic">📜</span>Actividad</button>
+    <button class="tab" id="tabSettings" onclick="showView('Settings')"><span class="ic">☰</span>Más</button>
   </div>
 </div>
 
@@ -440,6 +511,7 @@ async function doSetup(){
   if(p1.length < 10) return lockMsg('La clave debe tener mínimo 10 caracteres.','err');
   if(p1 !== p2) return lockMsg('Las claves no coinciden.','err');
   masterPw = p1; vault = newVault();
+  logEv('🛡️ Bóveda creada');
   await persist();
   enterApp();
 }
@@ -452,6 +524,7 @@ async function doUnlock(){
     vault = await decryptVault(blob, p);
     masterPw = p;
     document.getElementById('unlockPw').value='';
+    logEv('🔓 Desbloqueo con clave maestra'); persistQuiet();
     enterApp();
   }catch(e){ lockMsg('❌ Clave incorrecta o datos dañados.','err'); }
 }
@@ -678,12 +751,14 @@ function copyHist(id, i){
 async function markChanged(id){
   const e = findEntry(id);
   e.lastChanged = new Date().toISOString();
+  logEv('✅ Clave marcada como cambiada: ' + e.aplicacion);
   await persist(); render(); toast('✅ Fecha de cambio actualizada');
 }
 async function delEntry(id){
   const e = findEntry(id);
   if(!confirm(`¿Eliminar "${e.aplicacion}"?`)) return;
   vault.entries = vault.entries.filter(x=>x.id!==id);
+  logEv('🗑️ Credencial eliminada: ' + e.aplicacion);
   await persist(); render(); toast('Eliminada');
 }
 
@@ -728,14 +803,19 @@ async function saveEntry(){
   if(editingId){
     const e = findEntry(editingId);
     // Si la contraseña cambió, guarda la anterior en el historial (últimas 5)
-    if(e.password && data.password !== e.password){
+    const pwChanged = e.password && data.password !== e.password;
+    if(pwChanged){
       e.history = e.history || [];
       e.history.unshift({password: e.password, hasta: new Date().toISOString()});
       e.history = e.history.slice(0, 5);
     }
     Object.assign(e, data);
+    logEv((pwChanged? '🔑 Contraseña actualizada: ':'✏️ Credencial editada: ') + data.aplicacion);
   }
-  else { vault.entries.push({id:crypto.randomUUID(), createdAt:new Date().toISOString(), ...data}); }
+  else {
+    vault.entries.push({id:crypto.randomUUID(), createdAt:new Date().toISOString(), ...data});
+    logEv('➕ Credencial creada: ' + data.aplicacion);
+  }
   await persist(); closeEditor(); render(); toast('💾 Guardado');
 }
 
@@ -768,6 +848,7 @@ async function exportVault(){
   a.href = URL.createObjectURL(f);
   a.download = 'TSI-Vault-'+new Date().toISOString().slice(0,10)+'.tsi';
   a.click(); URL.revokeObjectURL(a.href);
+  logEv('📤 Respaldo .tsi exportado'); persistQuiet();
   toast('📤 Archivo exportado. Súbelo a tu Drive.');
 }
 async function importVault(file){
@@ -779,6 +860,7 @@ async function importVault(file){
     const v = await decryptVault(blob, pw);
     if(!confirm(`El archivo contiene ${v.entries.length} credenciales.\n¿Reemplazar los datos de este dispositivo?`)) return;
     vault = v; masterPw = pw;
+    logEv(`📥 Bóveda restaurada desde archivo (${v.entries.length} credenciales)`);
     await persist(); loadSettingsUI(); render(); toast('📥 Bóveda restaurada');
   }catch(e){ toast('❌ Clave incorrecta o archivo inválido'); }
   document.getElementById('importFile').value='';
@@ -786,7 +868,7 @@ async function importVault(file){
 
 /* ---------- Ajustes ---------- */
 function loadSettingsUI(){
-  updateBioUI(); markLookUI();
+  updateBioUI(); markLookUI(); loadProfileUI();
   document.getElementById('driveClientId').value = driveClientIdGet();
   if(driveClientIdGet()) setSyncStatus('Configurado. Se sincroniza al desbloquear y tras cada cambio.');
   document.getElementById('setRotation').value = vault.settings.rotationDays||30;
@@ -805,7 +887,9 @@ async function changeMaster(){
   if(o!==masterPw) return toast('❌ Clave actual incorrecta');
   if(n.length<10) return toast('⚠️ Mínimo 10 caracteres');
   if(n!==n2) return toast('⚠️ Las claves nuevas no coinciden');
-  masterPw = n; await persist();
+  masterPw = n;
+  logEv('🔐 Clave maestra cambiada');
+  await persist();
   ['chOld','chNew','chNew2'].forEach(id=>document.getElementById(id).value='');
   if(bioConfigured()){ localStorage.removeItem(BIO_KEY); updateBioUI(); toast('🔑 Clave actualizada. La huella se desactivó — vuelve a activarla.'); }
   else toast('🔑 Clave maestra actualizada. Exporta un nuevo respaldo .tsi.');
@@ -851,10 +935,82 @@ function markLookUI(){
   const f = document.getElementById('lookFont'); if(f) f.value = l.font || 'sistema';
   const z = document.getElementById('lookSize'); if(z) z.value = l.size || 'normal';
 }
-function toggleAcc(id){
-  const b = document.getElementById(id);
-  b.classList.toggle('hidden');
-  document.getElementById('ch-'+id).textContent = b.classList.contains('hidden') ? '▸' : '▾';
+/* ---------- Navegación del menú Más ---------- */
+const SECTIONS = ['secProfile','secReport','secLook','secSync','secBackup','secAlerts','secSec','secAbout'];
+function openSection(id){
+  document.getElementById('moreMenu').classList.add('hidden');
+  SECTIONS.forEach(s=>document.getElementById(s).classList.toggle('hidden', s!==id));
+}
+function backToMenu(){
+  SECTIONS.forEach(s=>document.getElementById(s).classList.add('hidden'));
+  document.getElementById('moreMenu').classList.remove('hidden');
+}
+
+/* ---------- Bitácora de actividad ---------- */
+function logEv(ev){
+  if(!vault) return;
+  vault.activity = vault.activity || [];
+  vault.activity.unshift({t: new Date().toISOString(), ev});
+  vault.activity = vault.activity.slice(0, 300);
+}
+function mergeActivity(remote){
+  const all = [...(remote.activity||[]), ...(vault.activity||[])];
+  const seen = new Set();
+  return all.filter(a=>{ const k = a.t + a.ev; if(seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a,b)=>b.t.localeCompare(a.t)).slice(0, 300);
+}
+function renderAct(){
+  const el = document.getElementById('actList');
+  const acts = (vault && vault.activity) || [];
+  if(!acts.length){
+    el.innerHTML = '<div class="empty">Sin actividad registrada todavía.<br>Aquí verás cada creación, edición, cambio de clave,<br>sincronización y desbloqueo, con fecha y hora.</div>';
+    return;
+  }
+  el.innerHTML = acts.map(a=>{
+    const d = new Date(a.t);
+    return `<div class="act-row"><span class="act-time">${d.toLocaleDateString('es-CO')} ${d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'})}</span><span>${esc(a.ev)}</span></div>`;
+  }).join('');
+}
+
+/* ---------- Perfil (Mi cuenta) ---------- */
+async function saveProfile(){
+  const g = id=>document.getElementById(id).value.trim();
+  vault.profile = {nombre:g('pfNombre'), cargo:g('pfCargo'), empresa:g('pfEmpresa'), tel:g('pfTel'), mail:g('pfMail')};
+  logEv('👤 Perfil actualizado');
+  await persist(); toast('💾 Perfil guardado');
+}
+function loadProfileUI(){
+  const p = (vault && vault.profile) || {};
+  const set = (id,v)=>{ const e=document.getElementById(id); if(e) e.value = v||''; };
+  set('pfNombre',p.nombre); set('pfCargo',p.cargo); set('pfEmpresa',p.empresa); set('pfTel',p.tel); set('pfMail',p.mail);
+}
+
+/* ---------- Informe imprimible ---------- */
+function genReport(){
+  const p = vault.profile || {};
+  const rows = [...vault.entries].sort((a,b)=>(a.empresa+'|'+a.aplicacion).localeCompare(b.empresa+'|'+b.aplicacion,'es'));
+  let venc=0, pron=0;
+  rows.forEach(e=>{ const s=statusOf(e); if(s==='vencida')venc++; else if(s==='pronto')pron++; });
+  const stTxt = {vencida:'<span class="venc">VENCIDA</span>', pronto:'<span class="pron">Por vencer</span>', ok:'Al día'};
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Informe TSI Vault</title>
+<style>body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:28px}h1{font-size:19px;margin:0 0 4px}
+.sub{color:#444;font-size:12px;margin-bottom:3px}table{width:100%;border-collapse:collapse;margin-top:14px;font-size:11px}
+th,td{border:1px solid #888;padding:5px 7px;text-align:left}th{background:#e8eef7}
+.venc{color:#b30000;font-weight:bold}.pron{color:#8a6d00;font-weight:bold}
+button{margin-top:12px;padding:8px 16px;font-size:13px;cursor:pointer}@media print{button{display:none}}</style></head><body>
+<h1>🛡️ TSI Vault — Informe de credenciales y vencimientos</h1>
+<div class="sub">Generado: ${new Date().toLocaleString('es-CO')}</div>
+${p.nombre? `<div class="sub">Responsable: ${esc(p.nombre)}${p.cargo? ' · '+esc(p.cargo):''}${p.empresa? ' · '+esc(p.empresa):''}</div>`:''}
+${p.mail||p.tel? `<div class="sub">Contacto: ${esc(p.mail||'')}${p.tel? ' · '+esc(p.tel):''}</div>`:''}
+<div class="sub"><b>Total: ${rows.length} credenciales · Vencidas: ${venc} · Por vencer: ${pron} · Al día: ${rows.length-venc-pron}</b></div>
+<button onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
+<table><tr><th>Empresa</th><th>Ciudad</th><th>Área</th><th>Aplicación / Equipo</th><th>Usuario</th><th>Creada</th><th>Último cambio</th><th>Frecuencia</th><th>Estado</th></tr>
+${rows.map(e=>`<tr><td>${esc(e.empresa)}</td><td>${esc(e.ciudad)}</td><td>${esc(e.area||'')}</td><td>${esc(e.aplicacion)}</td><td>${esc(e.usuario||'')}</td><td>${fmtD(e.createdAt)}</td><td>${fmtD(e.lastChanged||e.createdAt)}</td><td>cada ${e.rotationDays||vault.settings.rotationDays} días</td><td>${stTxt[statusOf(e)]}</td></tr>`).join('')}
+</table></body></html>`;
+  const w = window.open('', '_blank');
+  if(!w) return toast('⚠️ Permite ventanas emergentes para generar el informe');
+  w.document.write(html); w.document.close();
+  logEv('📊 Informe generado'); persistQuiet();
 }
 
 /* ---------- Desbloqueo biométrico (WebAuthn + extensión PRF) ----------
@@ -919,6 +1075,7 @@ async function bioUnlock(){
     const blob = JSON.parse(localStorage.getItem(LS_KEY));
     vault = await decryptVault(blob, pw);
     masterPw = pw; lockMsg('');
+    logEv('🖐️ Desbloqueo con huella'); persistQuiet();
     enterApp();
   }catch(e){ lockMsg('❌ No se pudo desbloquear con huella. Usa tu clave maestra.','err'); }
 }
@@ -1015,6 +1172,7 @@ async function driveSync(auto){
 
     if(!files.length){
       await driveUpload(tok, null);
+      logEv('☁️ Primera subida a Drive'); persistQuiet();
       setSyncStatus('✅ Bóveda subida a Drive por primera vez ('+vault.entries.length+' credenciales)');
     } else {
       const id = files[0].id;
@@ -1030,15 +1188,19 @@ async function driveSync(auto){
       }
       const rT = Date.parse(remote.updatedAt || 0), lT = Date.parse(vault.updatedAt || 0);
       if(rT > lT){
+        vault.activity = mergeActivity(remote);
         vault.entries = remote.entries;
         vault.settings = remote.settings || vault.settings;
+        vault.profile = remote.profile || vault.profile;
         vault.updatedAt = remote.updatedAt;
+        logEv('⬇️ Datos actualizados desde Drive');
         await persistQuiet();
         loadSettingsUI(); render();
         setSyncStatus('⬇️ Datos actualizados desde Drive ('+vault.entries.length+' credenciales)');
         toast('⬇️ Sincronizado desde Drive');
       } else if(lT > rT){
         await driveUpload(tok, id);
+        logEv('⬆️ Drive actualizado'); persistQuiet();
         setSyncStatus('⬆️ Drive actualizado ('+vault.entries.length+' credenciales)');
       } else {
         setSyncStatus('✅ Todo sincronizado ('+vault.entries.length+' credenciales)');
@@ -1078,12 +1240,14 @@ function checkNotify(){
 
 /* ---------- Vistas ---------- */
 function showView(v){
-  ['List','Gen','Settings'].forEach(x=>{
+  ['List','Gen','Act','Settings'].forEach(x=>{
     document.getElementById('view'+x).classList.toggle('hidden', x!==v);
     document.getElementById('tab'+x).classList.toggle('active', x===v);
   });
   document.getElementById('fab').classList.toggle('hidden', v!=='List');
   if(v==='Gen' && document.getElementById('genResult').textContent==='—') runGenerator();
+  if(v==='Act') renderAct();
+  if(v==='Settings') backToMenu();
 }
 
 /* ---------- Toast ---------- */
