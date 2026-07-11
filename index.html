@@ -67,6 +67,10 @@ header h2 span{display:block;font-size:11px;color:var(--muted);font-weight:400}
 
 /* Lista */
 .entry{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px}
+.entry.compact{padding:10px 14px;margin-bottom:8px}
+.group-head{display:flex;align-items:center;gap:9px;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:11px 14px;margin:14px 0 8px;font-weight:700;font-size:14px;cursor:pointer;user-select:none}
+.group-head .gcount{margin-left:auto;background:var(--bg2);border-radius:20px;padding:2px 11px;font-size:12px;color:var(--muted);font-weight:600}
+.chev{color:var(--muted);font-size:12px;flex-shrink:0}
 .entry-head{display:flex;align-items:flex-start;gap:10px}
 .entry-head .info{flex:1;min-width:0}
 .entry-title{font-weight:700;font-size:15.5px;word-break:break-word}
@@ -269,7 +273,7 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
       <p>Elimina la bóveda de este navegador. Exporta primero tu respaldo .tsi.</p>
       <button class="btn-danger btn" onclick="wipeAll()">Borrar bóveda local</button>
     </div>
-    <p style="text-align:center;color:var(--muted);font-size:11.5px;margin:18px 0">TSI Vault v1.2 · Cifrado AES-256-GCM · PBKDF2 310.000 iteraciones · Sync Drive · Huella<br>Los datos nunca salen de tu dispositivo sin cifrar.</p>
+    <p style="text-align:center;color:var(--muted);font-size:11.5px;margin:18px 0">TSI Vault v1.3 · Cifrado AES-256-GCM · PBKDF2 310.000 iteraciones · Sync Drive · Huella<br>Los datos nunca salen de tu dispositivo sin cifrar.</p>
   </div>
 
   <button class="fab" id="fab" onclick="openEditor()">＋</button>
@@ -332,6 +336,9 @@ let masterPw = null;     // clave maestra en memoria (solo sesión)
 let editingId = null;
 let dashFilter = '';
 let lockTimer = null;
+let expandedIds = new Set();      // credenciales expandidas
+let collapsedGroups = new Set();  // grupos de empresa colapsados
+let groupNames = [];
 
 /* ---------- Utilidades cripto ---------- */
 const enc = new TextEncoder(), dec = new TextDecoder();
@@ -540,19 +547,32 @@ function render(){
     list.innerHTML = `<div class="empty">${vault.entries.length? 'Sin resultados con estos filtros.' : 'Aún no hay credenciales.<br>Toca <b>＋</b> para agregar la primera.<br><br>Ejemplo: PSS Smart Lite — DVR Sede Norte'}</div>`;
     return;
   }
-  list.innerHTML = items.map(e=>{
-    const s = statusOf(e), d = daysLeft(e);
-    const badge = s==='vencida' ? `<span class="badge b-red">🔴 Vencida ${d<0? '('+(-d)+' d)':''}</span>`
-              : s==='pronto'  ? `<span class="badge b-yel">🟡 ${d} día(s)</span>`
-              : `<span class="badge b-grn">🟢 ${d} días</span>`;
-    return `<div class="entry">
-      <div class="entry-head">
-        <div class="info">
-          <div class="entry-title">${esc(e.aplicacion)}</div>
-          <div class="entry-meta">🏢 ${esc(e.empresa)} · 📍 ${esc(e.ciudad)}${e.area? ' · '+esc(e.area):''}${e.url? ' · '+esc(e.url):''}</div>
-        </div>
-        ${badge}
-      </div>
+  // Agrupar por empresa (orden alfabético; adentro, las más urgentes primero)
+  const groups = {};
+  items.forEach(e=>{ (groups[e.empresa] = groups[e.empresa] || []).push(e); });
+  groupNames = Object.keys(groups).sort((a,b)=>a.localeCompare(b,'es'));
+  list.innerHTML = groupNames.map((emp,gi)=>{
+    const arr = groups[emp];
+    const col = collapsedGroups.has(emp);
+    return `<div class="group-head" onclick="toggleGroup(${gi})">
+        <span class="chev">${col? '▸':'▾'}</span>🏢 ${esc(emp)}<span class="gcount">${arr.length}</span>
+      </div>` + (col ? '' : arr.map(entryHTML).join(''));
+  }).join('');
+}
+
+function fmtD(iso){ return iso ? new Date(iso).toLocaleDateString('es-CO') : '—'; }
+
+function entryHTML(e){
+  const s = statusOf(e), d = daysLeft(e);
+  const badge = s==='vencida' ? `<span class="badge b-red">🔴 Vencida ${d<0? '('+(-d)+' d)':''}</span>`
+            : s==='pronto'  ? `<span class="badge b-yel">🟡 ${d} día(s)</span>`
+            : `<span class="badge b-grn">🟢 ${d} días</span>`;
+  const open = expandedIds.has(e.id);
+  let det = '';
+  if(open){
+    det = `
+      <div class="entry-meta" style="margin-top:4px">📍 ${esc(e.ciudad)}${e.area? ' · '+esc(e.area):''}${e.url? ' · '+esc(e.url):''}</div>
+      <div class="entry-meta">📅 Creada: ${fmtD(e.createdAt)} · 🔄 Último cambio: ${fmtD(e.lastChanged||e.createdAt)}</div>
       <div class="cred-row"><span class="k">Usuario</span><span class="v">${esc(e.usuario)||'—'}</span>
         <button class="icon-btn" onclick="copyEntry('${e.id}','usuario')">📋</button></div>
       <div class="cred-row"><span class="k">Clave</span><span class="v" id="pw-${e.id}">••••••••</span>
@@ -567,9 +587,23 @@ function render(){
         <button class="btn btn-sec btn-sm" onclick="openEditor('${e.id}')">✏️ Editar</button>
         ${e.history && e.history.length ? `<button class="btn btn-sec btn-sm" onclick="toggleHist('${e.id}')">🕘 Anteriores (${e.history.length})</button>`:''}
         <button class="btn-danger btn btn-sm" onclick="delEntry('${e.id}')">🗑️</button>
-      </div>
-    </div>`;
-  }).join('');
+      </div>`;
+  }
+  return `<div class="entry${open? '':' compact'}">
+    <div class="entry-head" style="cursor:pointer" onclick="toggleEntry('${e.id}')">
+      <div class="info"><div class="entry-title">${esc(e.aplicacion)}</div></div>
+      ${badge}<span class="chev">${open? '▾':'▸'}</span>
+    </div>${det}
+  </div>`;
+}
+function toggleEntry(id){
+  expandedIds.has(id) ? expandedIds.delete(id) : expandedIds.add(id);
+  render();
+}
+function toggleGroup(gi){
+  const g = groupNames[gi];
+  collapsedGroups.has(g) ? collapsedGroups.delete(g) : collapsedGroups.add(g);
+  render();
 }
 
 function findEntry(id){ return vault.entries.find(e=>e.id===id); }
