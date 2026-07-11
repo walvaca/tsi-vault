@@ -155,6 +155,7 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
   <header>
     <div class="logo">🛡️</div>
     <h2>TSI Vault <span id="entryCount"></span></h2>
+    <button class="icon-btn" title="Sincronizar con Drive" onclick="driveSync(false)">☁️</button>
     <button class="icon-btn" title="Bloquear" onclick="lockNow()">🔒</button>
   </header>
 
@@ -204,7 +205,20 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
 
   <!-- ===== VISTA AJUSTES ===== -->
   <div id="viewSettings" class="hidden">
-    <div class="section-title">Respaldo en la nube (Google Drive / OneDrive)</div>
+    <div class="section-title">Sincronización automática</div>
+    <div class="set-card">
+      <h4>☁️ Google Drive</h4>
+      <p id="driveStatus">No configurado. Pega tu ID de cliente OAuth (se crea una sola vez en Google Cloud Console).</p>
+      <label>ID de cliente OAuth</label>
+      <input id="driveClientId" placeholder="123456789-abc123.apps.googleusercontent.com" autocomplete="off">
+      <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn btn-sec" onclick="saveDriveId()">Guardar ID</button>
+        <button class="btn" onclick="driveSync(false)">☁️ Conectar y sincronizar</button>
+      </div>
+      <p style="margin-top:10px;margin-bottom:0">Con esto, la app sube y baja tu bóveda cifrada (archivo <b>TSI-Vault-sync.tsi</b> en tu Drive) automáticamente al desbloquear y después de cada cambio. Usa la misma clave maestra en todos tus dispositivos.</p>
+    </div>
+
+    <div class="section-title">Respaldo manual (archivo .tsi)</div>
     <div class="set-card">
       <h4>📤 Exportar bóveda cifrada</h4>
       <p>Descarga un archivo <b>.tsi</b> cifrado con AES-256. Súbelo a tu Google Drive u OneDrive. Sin tu clave maestra, el archivo es ilegible para cualquiera.</p>
@@ -249,7 +263,7 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
       <p>Elimina la bóveda de este navegador. Exporta primero tu respaldo .tsi.</p>
       <button class="btn-danger btn" onclick="wipeAll()">Borrar bóveda local</button>
     </div>
-    <p style="text-align:center;color:var(--muted);font-size:11.5px;margin:18px 0">TSI Vault v1.0 · Cifrado AES-256-GCM · PBKDF2 310.000 iteraciones<br>Los datos nunca salen de tu dispositivo sin cifrar.</p>
+    <p style="text-align:center;color:var(--muted);font-size:11.5px;margin:18px 0">TSI Vault v1.1 · Cifrado AES-256-GCM · PBKDF2 310.000 iteraciones · Sync Drive<br>Los datos nunca salen de tu dispositivo sin cifrar.</p>
   </div>
 
   <button class="fab" id="fab" onclick="openEditor()">＋</button>
@@ -344,6 +358,12 @@ async function persist(){
   vault.updatedAt = new Date().toISOString();
   const blob = await encryptVault(vault, masterPw);
   localStorage.setItem(LS_KEY, JSON.stringify(blob));
+  scheduleAutoSync();
+}
+/* Guarda sin cambiar updatedAt (para aplicar datos que vienen de Drive) */
+async function persistQuiet(){
+  const blob = await encryptVault(vault, masterPw);
+  localStorage.setItem(LS_KEY, JSON.stringify(blob));
 }
 function newVault(){
   return {version:1, createdAt:new Date().toISOString(),
@@ -424,6 +444,7 @@ function enterApp(){
   document.getElementById('lockScreen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   loadSettingsUI(); render(); resetLockTimer(); checkNotify();
+  if(driveClientIdGet()) driveSync(true); // sincroniza al desbloquear
 }
 
 /* ---------- Vencimientos ---------- */
@@ -661,6 +682,8 @@ async function importVault(file){
 
 /* ---------- Ajustes ---------- */
 function loadSettingsUI(){
+  document.getElementById('driveClientId').value = driveClientIdGet();
+  if(driveClientIdGet()) setSyncStatus('Configurado. Se sincroniza al desbloquear y tras cada cambio.');
   document.getElementById('setRotation').value = vault.settings.rotationDays||30;
   document.getElementById('setWarn').value = vault.settings.warnDays||5;
   document.getElementById('setAutolock').value = vault.settings.autolockMin||5;
@@ -685,6 +708,136 @@ function wipeAll(){
   if(!confirm('¿Seguro? Se borrará TODO en este dispositivo.')) return;
   if(!confirm('Última confirmación: ¿ya exportaste tu respaldo .tsi?')) return;
   localStorage.removeItem(LS_KEY); location.reload();
+}
+
+/* ---------- Sincronización con Google Drive ----------
+   Usa Google Identity Services + Drive API v3, scope drive.file
+   (la app solo ve archivos que ella misma creó). El archivo
+   TSI-Vault-sync.tsi viaja SIEMPRE cifrado con AES-256. */
+const DRIVE_FILE = 'TSI-Vault-sync.tsi';
+const DRIVE_ID_KEY = 'tsi_drive_client_id';
+let cachedTok = null, tokExp = 0, syncTimer = null, syncing = false;
+
+function driveClientIdGet(){ return localStorage.getItem(DRIVE_ID_KEY) || ''; }
+function saveDriveId(){
+  const v = document.getElementById('driveClientId').value.trim();
+  if(!v.includes('.apps.googleusercontent.com')) return toast('⚠️ Ese no parece un ID de cliente válido');
+  localStorage.setItem(DRIVE_ID_KEY, v);
+  setSyncStatus('ID guardado. Pulsa "Conectar y sincronizar".');
+  toast('✅ ID guardado');
+}
+function setSyncStatus(t){
+  const el = document.getElementById('driveStatus');
+  if(el) el.textContent = t;
+}
+function loadGis(){
+  return new Promise((res, rej)=>{
+    if(window.google && google.accounts && google.accounts.oauth2) return res();
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.onload = res; s.onerror = ()=>rej(new Error('No se pudo cargar Google Identity'));
+    document.head.appendChild(s);
+  });
+}
+async function getToken(interactive){
+  if(cachedTok && Date.now() < tokExp - 60000) return cachedTok;
+  await loadGis();
+  return new Promise((resolve, reject)=>{
+    const tc = google.accounts.oauth2.initTokenClient({
+      client_id: driveClientIdGet(),
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: r=>{
+        if(r.error) return reject(r);
+        cachedTok = r.access_token;
+        tokExp = Date.now() + (r.expires_in ? r.expires_in*1000 : 3600000);
+        resolve(cachedTok);
+      },
+      error_callback: e=>reject(e)
+    });
+    tc.requestAccessToken({prompt: interactive ? '' : 'none'});
+  });
+}
+async function driveUpload(tok, id){
+  const blob = await encryptVault(vault, masterPw);
+  const body = JSON.stringify(blob);
+  if(id){
+    const r = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`,
+      {method:'PATCH', headers:{Authorization:'Bearer '+tok, 'Content-Type':'application/json'}, body});
+    if(!r.ok) throw new Error('upload '+r.status);
+  } else {
+    const boundary = 'tsivaultsync';
+    const meta = JSON.stringify({name:DRIVE_FILE, mimeType:'application/json'});
+    const mp = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${boundary}--`;
+    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+      {method:'POST', headers:{Authorization:'Bearer '+tok, 'Content-Type':'multipart/related; boundary='+boundary}, body:mp});
+    if(!r.ok) throw new Error('create '+r.status);
+  }
+}
+function scheduleAutoSync(){
+  if(!driveClientIdGet() || !vault) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(()=>driveSync(true), 4000);
+}
+async function driveSync(auto){
+  if(!vault || !masterPw || syncing) return;
+  const cid = driveClientIdGet();
+  if(!cid){
+    if(!auto){ showView('Settings'); toast('Primero configura el ID de cliente en Ajustes'); }
+    return;
+  }
+  syncing = true;
+  setSyncStatus('⏳ Sincronizando…');
+  try{
+    let tok;
+    try{ tok = await getToken(false); }
+    catch(e){
+      if(auto){ setSyncStatus('🔌 Pulsa ☁️ para conectar con Google'); syncing=false; return; }
+      tok = await getToken(true); // abre la ventana de Google para autorizar
+    }
+    const q = encodeURIComponent(`name='${DRIVE_FILE}' and trashed=false`);
+    const fr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,modifiedTime)`,
+      {headers:{Authorization:'Bearer '+tok}});
+    if(!fr.ok) throw new Error('list '+fr.status);
+    const files = (await fr.json()).files || [];
+
+    if(!files.length){
+      await driveUpload(tok, null);
+      setSyncStatus('✅ Bóveda subida a Drive por primera vez ('+vault.entries.length+' credenciales)');
+    } else {
+      const id = files[0].id;
+      const dr = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`,
+        {headers:{Authorization:'Bearer '+tok}});
+      if(!dr.ok) throw new Error('download '+dr.status);
+      const blob = await dr.json();
+      let remote;
+      try{ remote = await decryptVault(blob, masterPw); }
+      catch(e){
+        setSyncStatus('❌ El archivo de Drive usa OTRA clave maestra. Usa la misma clave en todos los dispositivos.');
+        syncing = false; return;
+      }
+      const rT = Date.parse(remote.updatedAt || 0), lT = Date.parse(vault.updatedAt || 0);
+      if(rT > lT){
+        vault.entries = remote.entries;
+        vault.settings = remote.settings || vault.settings;
+        vault.updatedAt = remote.updatedAt;
+        await persistQuiet();
+        loadSettingsUI(); render();
+        setSyncStatus('⬇️ Datos actualizados desde Drive ('+vault.entries.length+' credenciales)');
+        toast('⬇️ Sincronizado desde Drive');
+      } else if(lT > rT){
+        await driveUpload(tok, id);
+        setSyncStatus('⬆️ Drive actualizado ('+vault.entries.length+' credenciales)');
+      } else {
+        setSyncStatus('✅ Todo sincronizado ('+vault.entries.length+' credenciales)');
+      }
+    }
+    if(!auto) toast('☁️ Sincronización completa');
+  }catch(e){
+    console.error('Sync:', e);
+    setSyncStatus('❌ Error de sincronización. Revisa tu conexión o el ID de cliente.');
+    if(!auto) toast('❌ Error al sincronizar');
+  }
+  syncing = false;
 }
 
 /* ---------- Notificaciones ---------- */
