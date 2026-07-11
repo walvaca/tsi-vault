@@ -144,6 +144,7 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
     <div id="unlockForm" class="hidden">
       <input type="password" id="unlockPw" placeholder="Clave maestra" autocomplete="current-password" style="text-align:center">
       <button class="btn" style="width:100%;margin-top:14px" onclick="doUnlock()">🔓 Desbloquear</button>
+      <button class="btn btn-sec hidden" id="bioBtn" style="width:100%;margin-top:10px" onclick="bioUnlock()">🖐️ Desbloquear con huella</button>
       <button class="btn-sec btn" style="width:100%;margin-top:10px" onclick="importFromLock()">📂 Restaurar desde archivo .tsi</button>
     </div>
     <div id="lockMsg"></div>
@@ -249,6 +250,11 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
 
     <div class="section-title">Seguridad</div>
     <div class="set-card">
+      <h4>🖐️ Desbloqueo con huella</h4>
+      <p>Usa la biometría de este dispositivo (huella o rostro) para desbloquear sin escribir la clave maestra. Se configura por dispositivo — actívala en el celular y en el PC por separado.</p>
+      <button class="btn btn-sec" id="bioToggleBtn" onclick="bioToggle()">Activar huella en este dispositivo</button>
+    </div>
+    <div class="set-card">
       <h4>🔑 Cambiar clave maestra</h4>
       <label>Clave maestra actual</label>
       <input type="password" id="chOld" autocomplete="current-password">
@@ -263,7 +269,7 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
       <p>Elimina la bóveda de este navegador. Exporta primero tu respaldo .tsi.</p>
       <button class="btn-danger btn" onclick="wipeAll()">Borrar bóveda local</button>
     </div>
-    <p style="text-align:center;color:var(--muted);font-size:11.5px;margin:18px 0">TSI Vault v1.1 · Cifrado AES-256-GCM · PBKDF2 310.000 iteraciones · Sync Drive<br>Los datos nunca salen de tu dispositivo sin cifrar.</p>
+    <p style="text-align:center;color:var(--muted);font-size:11.5px;margin:18px 0">TSI Vault v1.2 · Cifrado AES-256-GCM · PBKDF2 310.000 iteraciones · Sync Drive · Huella<br>Los datos nunca salen de tu dispositivo sin cifrar.</p>
   </div>
 
   <button class="fab" id="fab" onclick="openEditor()">＋</button>
@@ -375,6 +381,7 @@ function initLock(){
   const has = !!localStorage.getItem(LS_KEY);
   document.getElementById('setupForm').classList.toggle('hidden', has);
   document.getElementById('unlockForm').classList.toggle('hidden', !has);
+  updateBioUI();
   setTimeout(()=>document.getElementById(has?'unlockPw':'setupPw').focus(), 200);
 }
 function lockMsg(t, cls){ const m=document.getElementById('lockMsg'); m.textContent=t; m.className=cls||''; }
@@ -552,9 +559,13 @@ function render(){
         <button class="icon-btn" onclick="revealPw('${e.id}',this)">👁️</button>
         <button class="icon-btn" onclick="copyEntry('${e.id}','password')">📋</button></div>
       ${e.notas? `<div class="entry-meta" style="margin-top:8px">📝 ${esc(e.notas)}</div>`:''}
+      ${e.history && e.history.length ? `<div id="hist-${e.id}" class="hidden">` + e.history.map((h,i)=>
+        `<div class="cred-row"><span class="k">hasta ${new Date(h.hasta).toLocaleDateString('es-CO')}</span><span class="v">${esc(h.password)}</span>
+         <button class="icon-btn" onclick="copyHist('${e.id}',${i})">📋</button></div>`).join('') + `</div>` : ''}
       <div class="entry-actions">
         <button class="btn btn-sec btn-sm" onclick="markChanged('${e.id}')">✅ Ya la cambié hoy</button>
         <button class="btn btn-sec btn-sm" onclick="openEditor('${e.id}')">✏️ Editar</button>
+        ${e.history && e.history.length ? `<button class="btn btn-sec btn-sm" onclick="toggleHist('${e.id}')">🕘 Anteriores (${e.history.length})</button>`:''}
         <button class="btn-danger btn btn-sm" onclick="delEntry('${e.id}')">🗑️</button>
       </div>
     </div>`;
@@ -579,6 +590,14 @@ function copyEntry(id, field){
 async function copyText(t, msg){
   try{ await navigator.clipboard.writeText(t); toast(msg||'Copiado'); }
   catch(e){ toast('No se pudo copiar'); }
+}
+function toggleHist(id){
+  document.getElementById('hist-'+id).classList.toggle('hidden');
+}
+function copyHist(id, i){
+  const e = findEntry(id);
+  copyText(e.history[i].password, 'Contraseña anterior copiada (se borra en 30 s)');
+  setTimeout(()=>{ navigator.clipboard.writeText('').catch(()=>{}); }, 30000);
 }
 async function markChanged(id){
   const e = findEntry(id);
@@ -630,7 +649,16 @@ async function saveEntry(){
     rotationDays:parseInt(g('eRotation'))||30, warnDays:parseInt(g('eWarn'))||5,
     lastChanged:new Date(g('eLastChanged')+'T12:00:00').toISOString(), notas:g('eNotas')
   };
-  if(editingId){ Object.assign(findEntry(editingId), data); }
+  if(editingId){
+    const e = findEntry(editingId);
+    // Si la contraseña cambió, guarda la anterior en el historial (últimas 5)
+    if(e.password && data.password !== e.password){
+      e.history = e.history || [];
+      e.history.unshift({password: e.password, hasta: new Date().toISOString()});
+      e.history = e.history.slice(0, 5);
+    }
+    Object.assign(e, data);
+  }
   else { vault.entries.push({id:crypto.randomUUID(), createdAt:new Date().toISOString(), ...data}); }
   await persist(); closeEditor(); render(); toast('💾 Guardado');
 }
@@ -682,6 +710,7 @@ async function importVault(file){
 
 /* ---------- Ajustes ---------- */
 function loadSettingsUI(){
+  updateBioUI();
   document.getElementById('driveClientId').value = driveClientIdGet();
   if(driveClientIdGet()) setSyncStatus('Configurado. Se sincroniza al desbloquear y tras cada cambio.');
   document.getElementById('setRotation').value = vault.settings.rotationDays||30;
@@ -702,12 +731,79 @@ async function changeMaster(){
   if(n!==n2) return toast('⚠️ Las claves nuevas no coinciden');
   masterPw = n; await persist();
   ['chOld','chNew','chNew2'].forEach(id=>document.getElementById(id).value='');
-  toast('🔑 Clave maestra actualizada. Exporta un nuevo respaldo .tsi.');
+  if(bioConfigured()){ localStorage.removeItem(BIO_KEY); updateBioUI(); toast('🔑 Clave actualizada. La huella se desactivó — vuelve a activarla.'); }
+  else toast('🔑 Clave maestra actualizada. Exporta un nuevo respaldo .tsi.');
 }
 function wipeAll(){
   if(!confirm('¿Seguro? Se borrará TODO en este dispositivo.')) return;
   if(!confirm('Última confirmación: ¿ya exportaste tu respaldo .tsi?')) return;
   localStorage.removeItem(LS_KEY); location.reload();
+}
+
+/* ---------- Desbloqueo biométrico (WebAuthn + extensión PRF) ----------
+   La huella deriva un secreto único del hardware del dispositivo, con el
+   que se cifra la clave maestra localmente. Sin la huella, no hay clave. */
+const BIO_KEY = 'tsi_bio_v1';
+function bioConfigured(){ return !!localStorage.getItem(BIO_KEY); }
+function updateBioUI(){
+  const lockBtn = document.getElementById('bioBtn');
+  if(lockBtn) lockBtn.classList.toggle('hidden', !bioConfigured());
+  const tBtn = document.getElementById('bioToggleBtn');
+  if(tBtn) tBtn.textContent = bioConfigured() ? '✅ Huella activa — pulsar para desactivar' : 'Activar huella en este dispositivo';
+}
+async function bioGetSecret(credId, salt){
+  const assertion = await navigator.credentials.get({publicKey:{
+    challenge: crypto.getRandomValues(new Uint8Array(32)),
+    allowCredentials:[{type:'public-key', id: credId}],
+    userVerification:'required', timeout:60000,
+    extensions:{prf:{eval:{first: salt}}}
+  }});
+  const out = assertion.getClientExtensionResults().prf?.results?.first;
+  if(!out) throw new Error('PRF no disponible');
+  return new Uint8Array(out);
+}
+async function bioToggle(){
+  if(bioConfigured()){
+    if(confirm('¿Desactivar el desbloqueo con huella en este dispositivo?')){
+      localStorage.removeItem(BIO_KEY); updateBioUI(); toast('Huella desactivada');
+    }
+    return;
+  }
+  if(!window.PublicKeyCredential) return toast('❌ Este navegador no soporta biometría');
+  try{
+    const cred = await navigator.credentials.create({publicKey:{
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rp:{name:'TSI Vault', id: location.hostname},
+      user:{id: crypto.getRandomValues(new Uint8Array(16)), name:'tsi-vault', displayName:'TSI Vault'},
+      pubKeyCredParams:[{type:'public-key', alg:-7},{type:'public-key', alg:-257}],
+      authenticatorSelection:{authenticatorAttachment:'platform', userVerification:'required', residentKey:'required'},
+      timeout:60000,
+      extensions:{prf:{}}
+    }});
+    if(!cred.getClientExtensionResults().prf?.enabled){
+      return toast('❌ Tu dispositivo no soporta huella para cifrado (PRF). Sigue usando la clave maestra.');
+    }
+    const salt = crypto.getRandomValues(new Uint8Array(32));
+    const secret = await bioGetSecret(cred.rawId, salt); // pedirá la huella
+    const key = await crypto.subtle.importKey('raw', secret, 'AES-GCM', false, ['encrypt']);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(masterPw));
+    localStorage.setItem(BIO_KEY, JSON.stringify({id:b64(cred.rawId), salt:b64(salt), iv:b64(iv), ct:b64(ct)}));
+    updateBioUI(); toast('✅ Huella activada en este dispositivo');
+  }catch(e){ console.error(e); toast('No se pudo activar la huella'); }
+}
+async function bioUnlock(){
+  try{
+    lockMsg('Esperando tu huella…');
+    const c = JSON.parse(localStorage.getItem(BIO_KEY));
+    const secret = await bioGetSecret(unb64(c.id), unb64(c.salt));
+    const key = await crypto.subtle.importKey('raw', secret, 'AES-GCM', false, ['decrypt']);
+    const pw = dec.decode(await crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(c.iv)}, key, unb64(c.ct)));
+    const blob = JSON.parse(localStorage.getItem(LS_KEY));
+    vault = await decryptVault(blob, pw);
+    masterPw = pw; lockMsg('');
+    enterApp();
+  }catch(e){ lockMsg('❌ No se pudo desbloquear con huella. Usa tu clave maestra.','err'); }
 }
 
 /* ---------- Sincronización con Google Drive ----------
@@ -890,6 +986,7 @@ document.addEventListener('keydown', e=>{
 });
 
 initLock();
+/* fin */
 </script>
 </body>
 </html>
