@@ -279,7 +279,7 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
       <div class="sec-head" onclick="backToMenu()">‹ Volver</div>
       <div class="set-card" style="text-align:center">
         <div class="logo" style="margin:0 auto 12px">🛡️</div>
-        <h4>TSI Vault <span id="aboutVer">v1.5</span></h4>
+        <h4>TSI Vault <span id="aboutVer">v1.6</span></h4>
         <p style="margin-top:8px">Gestor cifrado de credenciales de seguridad<br><b>TSI — Technology &amp; Security Intelligence</b><br>Bogotá, Colombia</p>
         <p style="font-size:11.5px;margin-bottom:0">AES-256-GCM · PBKDF2 310.000 iteraciones<br>Sincronización Google Drive · Biometría (WebAuthn PRF)<br>Tus datos nunca salen de tus dispositivos sin cifrar.</p>
       </div>
@@ -307,6 +307,11 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
           <option value="pequena">Pequeña</option>
           <option value="normal">Normal</option>
           <option value="grande">Grande</option>
+        </select>
+        <label>Idioma / Language</label>
+        <select id="lookLang" onchange="setLang(this.value)">
+          <option value="es">Español</option>
+          <option value="en">English</option>
         </select>
         <p style="margin-top:10px;margin-bottom:0">Se guarda por dispositivo: puedes tener un tema en el celular y otro en el PC.</p>
       </div>
@@ -597,7 +602,7 @@ function esc(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;',
 function refreshFilters(){
   const sets = {fEmpresa:new Set(), fCiudad:new Set(), fArea:new Set()};
   vault.entries.forEach(e=>{ if(e.empresa)sets.fEmpresa.add(e.empresa); if(e.ciudad)sets.fCiudad.add(e.ciudad); if(e.area)sets.fArea.add(e.area); });
-  const labels = {fEmpresa:'Empresa: todas', fCiudad:'Ciudad: todas', fArea:'Área: todas'};
+  const labels = {fEmpresa:t('Empresa: todas'), fCiudad:t('Ciudad: todas'), fArea:t('Área: todas')};
   for(const id in sets){
     const sel = document.getElementById(id), cur = sel.value;
     sel.innerHTML = `<option value="">${labels[id]}</option>` +
@@ -627,7 +632,7 @@ function render(){
   document.getElementById('numRed').textContent=red;
   document.getElementById('numYel').textContent=yel;
   document.getElementById('numGrn').textContent=grn;
-  document.getElementById('entryCount').textContent = vault.entries.length + ' credenciales · ' + (vault.updatedAt? 'act. '+new Date(vault.updatedAt).toLocaleDateString('es-CO') : '');
+  document.getElementById('entryCount').textContent = vault.entries.length + ' ' + t('credenciales') + ' · ' + (vault.updatedAt? t('act.')+' '+new Date(vault.updatedAt).toLocaleDateString('es-CO') : '');
   ['dashRed','dashYel','dashGrn'].forEach((id,i)=>{
     document.getElementById(id).classList.toggle('sel', dashFilter===['vencida','pronto','ok'][i]);
   });
@@ -638,10 +643,10 @@ function render(){
     .sort((a,b)=>daysLeft(a)-daysLeft(b)).slice(0,4);
   if(urgent.length){
     banner.classList.remove('hidden');
-    banner.innerHTML = '⚠️ <b>Atención:</b> ' + urgent.map(e=>{
+    banner.innerHTML = '⚠️ <b>' + t('Atención:') + '</b> ' + urgent.map(e=>{
       const d=daysLeft(e);
-      return `<b>${esc(e.aplicacion)}</b> (${esc(e.area||e.ciudad||'')}) ${d<=0? 'venció hace '+(-d)+' día(s)' : 'vence en '+d+' día(s)'}`;
-    }).join(' · ') + (red+yel>4? ` · y ${red+yel-4} más…`:'');
+      return `<b>${esc(e.aplicacion)}</b> (${esc(e.area||e.ciudad||'')}) ${d<=0? t('venció hace')+' '+(-d)+' '+t('día(s)') : t('vence en')+' '+d+' '+t('día(s)')}`;
+    }).join(' · ') + (red+yel>4? ` · +${red+yel-4} ${t('más…')}`:'');
   } else banner.classList.add('hidden');
 
   // Lista
@@ -659,7 +664,7 @@ function render(){
 
   const list = document.getElementById('list');
   if(!items.length){
-    list.innerHTML = `<div class="empty">${vault.entries.length? 'Sin resultados con estos filtros.' : 'Aún no hay credenciales.<br>Toca <b>＋</b> para agregar la primera.<br><br>Ejemplo: PSS Smart Lite — DVR Sede Norte'}</div>`;
+    list.innerHTML = `<div class="empty">${vault.entries.length? t('Sin resultados con estos filtros.') : t('Aún no hay credenciales.')+'<br>'+t('Toca')+' <b>＋</b> '+t('para agregar la primera.')+'<br><br>Ejemplo: PSS Smart Lite — DVR Sede Norte'}</div>`;
     return;
   }
   // Agrupar por empresa (orden alfabético; adentro, las más urgentes primero)
@@ -679,28 +684,28 @@ function fmtD(iso){ return iso ? new Date(iso).toLocaleDateString('es-CO') : '�
 
 function entryHTML(e){
   const s = statusOf(e), d = daysLeft(e);
-  const badge = s==='vencida' ? `<span class="badge b-red">🔴 Vencida ${d<0? '('+(-d)+' d)':''}</span>`
-            : s==='pronto'  ? `<span class="badge b-yel">🟡 ${d} día(s)</span>`
-            : `<span class="badge b-grn">🟢 ${d} días</span>`;
+  const badge = s==='vencida' ? `<span class="badge b-red">🔴 ${t('Vencida')} ${d<0? '('+(-d)+' d)':''}</span>`
+            : s==='pronto'  ? `<span class="badge b-yel">🟡 ${d} ${t('día(s)')}</span>`
+            : `<span class="badge b-grn">🟢 ${d} ${t('días')}</span>`;
   const open = expandedIds.has(e.id);
   let det = '';
   if(open){
     det = `
       <div class="entry-meta" style="margin-top:4px">📍 ${esc(e.ciudad)}${e.area? ' · '+esc(e.area):''}${e.url? ' · '+esc(e.url):''}</div>
-      <div class="entry-meta">📅 Creada: ${fmtD(e.createdAt)} · 🔄 Último cambio: ${fmtD(e.lastChanged||e.createdAt)}</div>
-      <div class="cred-row"><span class="k">Usuario</span><span class="v">${esc(e.usuario)||'—'}</span>
+      <div class="entry-meta">📅 ${t('Creada:')} ${fmtD(e.createdAt)} · 🔄 ${t('Último cambio:')} ${fmtD(e.lastChanged||e.createdAt)}</div>
+      <div class="cred-row"><span class="k">${t('Usuario')}</span><span class="v">${esc(e.usuario)||'—'}</span>
         <button class="icon-btn" onclick="copyEntry('${e.id}','usuario')">📋</button></div>
-      <div class="cred-row"><span class="k">Clave</span><span class="v" id="pw-${e.id}">••••••••</span>
+      <div class="cred-row"><span class="k">${t('Clave')}</span><span class="v" id="pw-${e.id}">••••••••</span>
         <button class="icon-btn" onclick="revealPw('${e.id}',this)">👁️</button>
         <button class="icon-btn" onclick="copyEntry('${e.id}','password')">📋</button></div>
       ${e.notas? `<div class="entry-meta" style="margin-top:8px">📝 ${esc(e.notas)}</div>`:''}
       ${e.history && e.history.length ? `<div id="hist-${e.id}" class="hidden">` + e.history.map((h,i)=>
-        `<div class="cred-row"><span class="k">hasta ${new Date(h.hasta).toLocaleDateString('es-CO')}</span><span class="v">${esc(h.password)}</span>
+        `<div class="cred-row"><span class="k">${t('hasta')} ${new Date(h.hasta).toLocaleDateString('es-CO')}</span><span class="v">${esc(h.password)}</span>
          <button class="icon-btn" onclick="copyHist('${e.id}',${i})">📋</button></div>`).join('') + `</div>` : ''}
       <div class="entry-actions">
-        <button class="btn btn-sec btn-sm" onclick="markChanged('${e.id}')">✅ Ya la cambié hoy</button>
-        <button class="btn btn-sec btn-sm" onclick="openEditor('${e.id}')">✏️ Editar</button>
-        ${e.history && e.history.length ? `<button class="btn btn-sec btn-sm" onclick="toggleHist('${e.id}')">🕘 Anteriores (${e.history.length})</button>`:''}
+        <button class="btn btn-sec btn-sm" onclick="markChanged('${e.id}')">${t('✅ Ya la cambié hoy')}</button>
+        <button class="btn btn-sec btn-sm" onclick="openEditor('${e.id}')">${t('✏️ Editar')}</button>
+        ${e.history && e.history.length ? `<button class="btn btn-sec btn-sm" onclick="toggleHist('${e.id}')">${t('🕘 Anteriores')} (${e.history.length})</button>`:''}
         <button class="btn-danger btn btn-sm" onclick="delEntry('${e.id}')">🗑️</button>
       </div>`;
   }
@@ -733,7 +738,7 @@ function revealPw(id, btn){
 }
 function copyEntry(id, field){
   const e = findEntry(id);
-  copyText(e[field]||'', field==='password'? 'Contraseña copiada (se borra del portapapeles en 30 s)':'Usuario copiado');
+  copyText(e[field]||'', field==='password'? t('Contraseña copiada (se borra del portapapeles en 30 s)'):t('Usuario copiado'));
   if(field==='password') setTimeout(()=>{ navigator.clipboard.writeText('').catch(()=>{}); }, 30000);
 }
 async function copyText(t, msg){
@@ -752,14 +757,14 @@ async function markChanged(id){
   const e = findEntry(id);
   e.lastChanged = new Date().toISOString();
   logEv('✅ Clave marcada como cambiada: ' + e.aplicacion);
-  await persist(); render(); toast('✅ Fecha de cambio actualizada');
+  await persist(); render(); toast(t('✅ Fecha de cambio actualizada'));
 }
 async function delEntry(id){
   const e = findEntry(id);
   if(!confirm(`¿Eliminar "${e.aplicacion}"?`)) return;
   vault.entries = vault.entries.filter(x=>x.id!==id);
   logEv('🗑️ Credencial eliminada: ' + e.aplicacion);
-  await persist(); render(); toast('Eliminada');
+  await persist(); render(); toast(t('Eliminada'));
 }
 
 /* ---------- Editor ---------- */
@@ -793,7 +798,7 @@ function genInto(){
 }
 async function saveEntry(){
   const g = id=>document.getElementById(id).value.trim();
-  if(!g('eEmpresa')||!g('eCiudad')||!g('eApp')) return toast('⚠️ Empresa, ciudad y aplicación son obligatorios');
+  if(!g('eEmpresa')||!g('eCiudad')||!g('eApp')) return toast(t('⚠️ Empresa, ciudad y aplicación son obligatorios'));
   const data = {
     empresa:g('eEmpresa'), ciudad:g('eCiudad'), area:g('eArea'), aplicacion:g('eApp'),
     usuario:g('eUser'), password:document.getElementById('ePass').value, url:g('eUrl'),
@@ -816,7 +821,7 @@ async function saveEntry(){
     vault.entries.push({id:crypto.randomUUID(), createdAt:new Date().toISOString(), ...data});
     logEv('➕ Credencial creada: ' + data.aplicacion);
   }
-  await persist(); closeEditor(); render(); toast('💾 Guardado');
+  await persist(); closeEditor(); render(); toast(t('💾 Guardado'));
 }
 
 /* ---------- Generador ---------- */
@@ -900,6 +905,132 @@ function wipeAll(){
   localStorage.removeItem(LS_KEY); location.reload();
 }
 
+/* ---------- Idioma (Español / English) ---------- */
+const LANG_KEY = 'tsi_lang';
+function getLang(){ return localStorage.getItem(LANG_KEY) || 'es'; }
+function setLang(v){ localStorage.setItem(LANG_KEY, v); location.reload(); }
+function t(s){ return (getLang()==='en' && DICT[s]) || s; }
+const DICT = {
+  // Bloqueo
+  'Gestor cifrado de credenciales':'Encrypted credential manager',
+  'Crea tu clave maestra':'Create your master password',
+  'Confirma la clave maestra':'Confirm master password',
+  'Crear bóveda cifrada':'Create encrypted vault',
+  '📂 Restaurar desde archivo .tsi':'📂 Restore from .tsi file',
+  '🔓 Desbloquear':'🔓 Unlock',
+  '🖐️ Desbloquear con huella':'🖐️ Unlock with fingerprint',
+  'Clave maestra':'Master password',
+  'Mínimo 10 caracteres':'Minimum 10 characters',
+  // Pestañas y encabezado
+  'Credenciales':'Credentials','Generador':'Generator','Actividad':'Activity','Más':'More',
+  'Sincronizar con Drive':'Sync with Drive','Bloquear':'Lock',
+  // Panel
+  'Vencidas':'Expired','Por vencer':'Due soon','Al día':'Up to date',
+  '🔍 Buscar aplicación, usuario, sede…':'🔍 Search app, user, site…',
+  // Generador
+  'Generador de contraseñas seguras':'Secure password generator',
+  'Mayúsculas (A-Z)':'Uppercase (A-Z)','Minúsculas (a-z)':'Lowercase (a-z)',
+  'Números (0-9)':'Numbers (0-9)','Símbolos (!@#$%)':'Symbols (!@#$%)',
+  'Evitar ambiguos (l,1,O,0)':'Avoid ambiguous (l,1,O,0)',
+  '⚡ Generar nueva':'⚡ Generate new','caracteres':'characters',
+  // Menú Más
+  'Cuenta':'Account','Configuración':'Settings','Acerca de':'About',
+  '👤 Mi cuenta':'👤 My account','📊 Informes':'📊 Reports',
+  '🎨 Apariencia':'🎨 Appearance','☁️ Sincronización automática':'☁️ Automatic sync',
+  '💾 Respaldo manual (.tsi)':'💾 Manual backup (.tsi)','🔔 Alertas y tiempos':'🔔 Alerts & timing',
+  '🔐 Seguridad':'🔐 Security','ℹ️ TSI Vault':'ℹ️ TSI Vault','‹ Volver':'‹ Back',
+  // Apariencia
+  'Tema de color':'Color theme','Fuente':'Font','Tamaño de letra':'Font size',
+  'Sistema (moderna)':'System (modern)','Clásica (serif)':'Classic (serif)','Técnica (monoespaciada)':'Technical (monospace)',
+  'Pequeña':'Small','Normal':'Normal','Grande':'Large',
+  'Se guarda por dispositivo: puedes tener un tema en el celular y otro en el PC.':'Saved per device: you can use one theme on your phone and another on your PC.',
+  // Perfil
+  'Nombre completo':'Full name','Cargo':'Job title','Empresa':'Company','Teléfono':'Phone','Correo':'Email',
+  '💾 Guardar perfil':'💾 Save profile',
+  'Datos del responsable de estas credenciales. Se guardan cifrados y se usan como membrete de los informes.':'Details of the person responsible for these credentials. Stored encrypted and used as the report letterhead.',
+  // Informes
+  '📊 Informe de credenciales y vencimientos':'📊 Credential & expiry report',
+  'Generar informe':'Generate report',
+  // Drive
+  '☁️ Google Drive':'☁️ Google Drive','ID de cliente OAuth':'OAuth client ID',
+  'Guardar ID':'Save ID','☁️ Conectar y sincronizar':'☁️ Connect & sync',
+  'No configurado. Pega tu ID de cliente OAuth (se crea una sola vez en Google Cloud Console).':'Not configured. Paste your OAuth client ID (created once in Google Cloud Console).',
+  // Respaldo
+  '📤 Exportar bóveda cifrada':'📤 Export encrypted vault','Exportar archivo .tsi':'Export .tsi file',
+  '📥 Importar / restaurar':'📥 Import / restore','Seleccionar archivo .tsi':'Select .tsi file',
+  // Alertas
+  '🔔 Notificaciones del navegador':'🔔 Browser notifications','Activar notificaciones':'Enable notifications',
+  '⏱️ Valores por defecto':'⏱️ Default values',
+  'Cambiar credenciales cada (días)':'Rotate credentials every (days)',
+  'Avisarme con anticipación (días)':'Warn me in advance (days)',
+  'Bloqueo automático por inactividad (minutos)':'Auto-lock after inactivity (minutes)',
+  // Seguridad
+  '🖐️ Desbloqueo con huella':'🖐️ Fingerprint unlock',
+  'Activar huella en este dispositivo':'Enable fingerprint on this device',
+  '✅ Huella activa — pulsar para desactivar':'✅ Fingerprint active — tap to disable',
+  '🔑 Cambiar clave maestra':'🔑 Change master password',
+  'Clave maestra actual':'Current master password','Nueva clave maestra':'New master password',
+  'Confirmar nueva clave':'Confirm new password','Cambiar clave':'Change password',
+  '🗑️ Borrar todo en este dispositivo':'🗑️ Erase everything on this device',
+  'Borrar bóveda local':'Erase local vault',
+  // Editor
+  'Nueva credencial':'New credential','Editar credencial':'Edit credential',
+  'Organiza por empresa, ciudad y área para encontrarla rápido.':'Organize by company, city and area to find it fast.',
+  'Empresa *':'Company *','Ciudad *':'City *','Área / Sede':'Area / Site','Aplicación / Equipo *':'Application / Device *',
+  'Usuario':'User','Contraseña':'Password','URL / IP (opcional)':'URL / IP (optional)',
+  'Cambiar cada (días)':'Rotate every (days)','Avisar antes (días)':'Warn before (days)',
+  'Último cambio de contraseña':'Last password change','Notas (opcional)':'Notes (optional)',
+  'Cancelar':'Cancel','💾 Guardar':'💾 Save','Generar':'Generate',
+  // Dinámicos
+  'Empresa: todas':'Company: all','Ciudad: todas':'City: all','Área: todas':'Area: all',
+  'credenciales':'credentials','act.':'upd.',
+  'Atención:':'Attention:','vence en':'due in','venció hace':'expired','día(s)':'day(s)','días':'days','más…':'more…',
+  'Vencida':'Expired','Clave':'Password','hasta':'until','Creada:':'Created:','Último cambio:':'Last change:',
+  '✅ Ya la cambié hoy':'✅ Changed it today','✏️ Editar':'✏️ Edit','🕘 Anteriores':'🕘 Previous',
+  'Sin resultados con estos filtros.':'No results with these filters.',
+  'Aún no hay credenciales.':'No credentials yet.','Toca':'Tap','para agregar la primera.':'to add the first one.',
+  'Sin actividad registrada todavía.':'No activity recorded yet.',
+  'Aquí verás cada evento con su fecha y hora.':'Every event will appear here with date and time.',
+  '💾 Guardado':'💾 Saved','Eliminada':'Deleted','✅ Fecha de cambio actualizada':'✅ Change date updated',
+  '⚠️ Empresa, ciudad y aplicación son obligatorios':'⚠️ Company, city and application are required',
+  'Contraseña copiada (se borra del portapapeles en 30 s)':'Password copied (clipboard clears in 30 s)',
+  'Usuario copiado':'User copied','Contraseña copiada':'Password copied','Copiado':'Copied',
+  '💾 Perfil guardado':'💾 Profile saved',
+  '⏳ Sincronizando…':'⏳ Syncing…','☁️ Sincronización completa':'☁️ Sync complete',
+  '✅ Notificaciones activas':'✅ Notifications active',
+  'Generado:':'Generated:','Responsable:':'Responsible:','Contacto:':'Contact:','Total:':'Total:',
+  'Ciudad':'City','Área':'Area','Aplicación / Equipo':'Application / Device','Creada':'Created',
+  'Último cambio':'Last change','Frecuencia':'Frequency','Estado':'Status','cada':'every',
+  '🖨️ Imprimir / Guardar como PDF':'🖨️ Print / Save as PDF','Por vencer_':'Due soon'
+};
+/* Traducciones de párrafos largos (por selector) */
+const HTML_I18N = [
+  ['#setupForm div[style*="margin-top:14px"]','⚠️ <b>Important:</b> the master password is NOT stored anywhere and CANNOT be recovered. If you forget it, your data cannot be opened. Memorize it well.'],
+  ['#secSync .set-card > p:last-of-type','With this, the app automatically uploads/downloads your encrypted vault (file <b>TSI-Vault-sync.tsi</b> in your Drive) when unlocking and after every change. Use the same master password on all your devices.'],
+  ['#secReport .set-card p','Generates a printable report with the status of all credentials, headed with your "My account" details. <b>It does not include passwords.</b> In the window that opens, use the Print button to save it as PDF.'],
+  ['#secSec .set-card:nth-of-type(1) p','Use this device\'s biometrics (fingerprint or face) to unlock without typing the master password. Configured per device — enable it on your phone and PC separately.'],
+  ['#secBackup .set-card:nth-of-type(1) p','Downloads a <b>.tsi</b> file encrypted with AES-256. Upload it to your Google Drive or OneDrive. Without your master password the file is unreadable to anyone.'],
+  ['#secBackup .set-card:nth-of-type(2) p','Open a .tsi file from Drive on another device. Replaces this device\'s current data.'],
+  ['#secAlerts .set-card:nth-of-type(1) p','Get a notification when opening the app if any credentials are expired or due soon.'],
+  ['#secSec .set-card:nth-of-type(3) p','Removes the vault from this browser. Export your .tsi backup first.'],
+  ['#viewGen .set-card p','Many older DVRs limit passwords to 8–32 characters and some reject symbols. If a device rejects the password, disable "Symbols" and generate again. Always use a different password per device.'],
+  ['#viewGen .set-card h4','💡 Tip for your Dahua DVRs and alarm panels'],
+  ['#secProfile .set-card p','Details of the person responsible for these credentials. Stored encrypted and used as the report letterhead.']
+];
+function applyLang(){
+  if(getLang() !== 'en') return;
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const nodes = []; let n;
+  while(n = walker.nextNode()) nodes.push(n);
+  nodes.forEach(nd=>{
+    const s = nd.nodeValue.trim();
+    if(s && DICT[s]) nd.nodeValue = nd.nodeValue.replace(s, DICT[s]);
+  });
+  document.querySelectorAll('[placeholder]').forEach(e=>{ if(DICT[e.placeholder]) e.placeholder = DICT[e.placeholder]; });
+  document.querySelectorAll('[title]').forEach(e=>{ if(DICT[e.title]) e.title = DICT[e.title]; });
+  HTML_I18N.forEach(([sel, html])=>{ const e = document.querySelector(sel); if(e) e.innerHTML = html; });
+}
+
 /* ---------- Apariencia (tema, fuente, tamaño) ---------- */
 const LOOK_KEY = 'tsi_look';
 const THEMES = {
@@ -934,6 +1065,7 @@ function markLookUI(){
   document.querySelectorAll('.swatch').forEach(s=>s.classList.toggle('sel', s.id === 'sw-'+th));
   const f = document.getElementById('lookFont'); if(f) f.value = l.font || 'sistema';
   const z = document.getElementById('lookSize'); if(z) z.value = l.size || 'normal';
+  const lg = document.getElementById('lookLang'); if(lg) lg.value = getLang();
 }
 /* ---------- Navegación del menú Más ---------- */
 const SECTIONS = ['secProfile','secReport','secLook','secSync','secBackup','secAlerts','secSec','secAbout'];
@@ -963,7 +1095,7 @@ function renderAct(){
   const el = document.getElementById('actList');
   const acts = (vault && vault.activity) || [];
   if(!acts.length){
-    el.innerHTML = '<div class="empty">Sin actividad registrada todavía.<br>Aquí verás cada creación, edición, cambio de clave,<br>sincronización y desbloqueo, con fecha y hora.</div>';
+    el.innerHTML = '<div class="empty">'+t('Sin actividad registrada todavía.')+'<br>'+t('Aquí verás cada evento con su fecha y hora.')+'</div>';
     return;
   }
   el.innerHTML = acts.map(a=>{
@@ -977,7 +1109,7 @@ async function saveProfile(){
   const g = id=>document.getElementById(id).value.trim();
   vault.profile = {nombre:g('pfNombre'), cargo:g('pfCargo'), empresa:g('pfEmpresa'), tel:g('pfTel'), mail:g('pfMail')};
   logEv('👤 Perfil actualizado');
-  await persist(); toast('💾 Perfil guardado');
+  await persist(); toast(t('💾 Perfil guardado'));
 }
 function loadProfileUI(){
   const p = (vault && vault.profile) || {};
@@ -991,21 +1123,21 @@ function genReport(){
   const rows = [...vault.entries].sort((a,b)=>(a.empresa+'|'+a.aplicacion).localeCompare(b.empresa+'|'+b.aplicacion,'es'));
   let venc=0, pron=0;
   rows.forEach(e=>{ const s=statusOf(e); if(s==='vencida')venc++; else if(s==='pronto')pron++; });
-  const stTxt = {vencida:'<span class="venc">VENCIDA</span>', pronto:'<span class="pron">Por vencer</span>', ok:'Al día'};
-  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Informe TSI Vault</title>
+  const stTxt = {vencida:'<span class="venc">'+t('Vencida').toUpperCase()+'</span>', pronto:'<span class="pron">'+t('Por vencer_')+'</span>', ok:t('Al día')};
+  const html = `<!DOCTYPE html><html lang="${getLang()}"><head><meta charset="utf-8"><title>Informe TSI Vault</title>
 <style>body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:28px}h1{font-size:19px;margin:0 0 4px}
 .sub{color:#444;font-size:12px;margin-bottom:3px}table{width:100%;border-collapse:collapse;margin-top:14px;font-size:11px}
 th,td{border:1px solid #888;padding:5px 7px;text-align:left}th{background:#e8eef7}
 .venc{color:#b30000;font-weight:bold}.pron{color:#8a6d00;font-weight:bold}
 button{margin-top:12px;padding:8px 16px;font-size:13px;cursor:pointer}@media print{button{display:none}}</style></head><body>
-<h1>🛡️ TSI Vault — Informe de credenciales y vencimientos</h1>
-<div class="sub">Generado: ${new Date().toLocaleString('es-CO')}</div>
-${p.nombre? `<div class="sub">Responsable: ${esc(p.nombre)}${p.cargo? ' · '+esc(p.cargo):''}${p.empresa? ' · '+esc(p.empresa):''}</div>`:''}
-${p.mail||p.tel? `<div class="sub">Contacto: ${esc(p.mail||'')}${p.tel? ' · '+esc(p.tel):''}</div>`:''}
-<div class="sub"><b>Total: ${rows.length} credenciales · Vencidas: ${venc} · Por vencer: ${pron} · Al día: ${rows.length-venc-pron}</b></div>
-<button onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>
-<table><tr><th>Empresa</th><th>Ciudad</th><th>Área</th><th>Aplicación / Equipo</th><th>Usuario</th><th>Creada</th><th>Último cambio</th><th>Frecuencia</th><th>Estado</th></tr>
-${rows.map(e=>`<tr><td>${esc(e.empresa)}</td><td>${esc(e.ciudad)}</td><td>${esc(e.area||'')}</td><td>${esc(e.aplicacion)}</td><td>${esc(e.usuario||'')}</td><td>${fmtD(e.createdAt)}</td><td>${fmtD(e.lastChanged||e.createdAt)}</td><td>cada ${e.rotationDays||vault.settings.rotationDays} días</td><td>${stTxt[statusOf(e)]}</td></tr>`).join('')}
+<h1>🛡️ TSI Vault — ${t('📊 Informe de credenciales y vencimientos').replace('📊 ','')}</h1>
+<div class="sub">${t('Generado:')} ${new Date().toLocaleString('es-CO')}</div>
+${p.nombre? `<div class="sub">${t('Responsable:')} ${esc(p.nombre)}${p.cargo? ' · '+esc(p.cargo):''}${p.empresa? ' · '+esc(p.empresa):''}</div>`:''}
+${p.mail||p.tel? `<div class="sub">${t('Contacto:')} ${esc(p.mail||'')}${p.tel? ' · '+esc(p.tel):''}</div>`:''}
+<div class="sub"><b>${t('Total:')} ${rows.length} ${t('credenciales')} · ${t('Vencidas')}: ${venc} · ${t('Por vencer_')}: ${pron} · ${t('Al día')}: ${rows.length-venc-pron}</b></div>
+<button onclick="window.print()">${t('🖨️ Imprimir / Guardar como PDF')}</button>
+<table><tr><th>${t('Empresa')}</th><th>${t('Ciudad')}</th><th>${t('Área')}</th><th>${t('Aplicación / Equipo')}</th><th>${t('Usuario')}</th><th>${t('Creada')}</th><th>${t('Último cambio')}</th><th>${t('Frecuencia')}</th><th>${t('Estado')}</th></tr>
+${rows.map(e=>`<tr><td>${esc(e.empresa)}</td><td>${esc(e.ciudad)}</td><td>${esc(e.area||'')}</td><td>${esc(e.aplicacion)}</td><td>${esc(e.usuario||'')}</td><td>${fmtD(e.createdAt)}</td><td>${fmtD(e.lastChanged||e.createdAt)}</td><td>${t('cada')} ${e.rotationDays||vault.settings.rotationDays} ${t('días')}</td><td>${stTxt[statusOf(e)]}</td></tr>`).join('')}
 </table></body></html>`;
   const w = window.open('', '_blank');
   if(!w) return toast('⚠️ Permite ventanas emergentes para generar el informe');
@@ -1267,6 +1399,7 @@ document.addEventListener('keydown', e=>{
 });
 
 applyLook();
+applyLang();
 initLock();
 /* fin */
 </script>
