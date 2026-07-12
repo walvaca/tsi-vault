@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com; base-uri 'self'; form-action 'self'; object-src 'none'">
 <meta name="theme-color" content="#0d1421">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
@@ -281,7 +282,7 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
         <div class="logo" style="margin:0 auto 12px">🛡️</div>
         <h4>TSI Vault <span id="aboutVer">v1.6</span></h4>
         <p style="margin-top:8px">Gestor cifrado de credenciales de seguridad<br><b>TSI — Technology &amp; Security Intelligence</b><br>Bogotá, Colombia</p>
-        <p style="font-size:11.5px;margin-bottom:0">AES-256-GCM · PBKDF2 310.000 iteraciones<br>Sincronización Google Drive · Biometría (WebAuthn PRF)<br>Tus datos nunca salen de tus dispositivos sin cifrar.</p>
+        <p style="font-size:11.5px;margin-bottom:0">AES-256-GCM · PBKDF2 600.000 iteraciones<br>Sincronización Google Drive · Biometría (WebAuthn PRF)<br>Tus datos nunca salen de tus dispositivos sin cifrar.</p>
       </div>
     </div>
 
@@ -445,10 +446,10 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
 'use strict';
 /* ================================================================
    TSI Vault — Gestor cifrado de credenciales
-   Cifrado: AES-256-GCM · Derivación: PBKDF2-SHA256 (310.000 iter.)
+   Cifrado: AES-256-GCM · Derivación: PBKDF2-SHA256 (600.000 iter.)
    ================================================================ */
 const LS_KEY = 'tsi_vault_v1';
-const PBKDF2_ITER = 310000;
+const PBKDF2_ITER = 600000; // I-1: reforzado (antes 310.000). decryptVault usa blob.iter, no esta constante, para no romper bóvedas ya cifradas.
 let vault = null;        // datos descifrados en memoria
 let masterPw = null;     // clave maestra en memoria (solo sesión)
 let editingId = null;
@@ -463,10 +464,10 @@ const enc = new TextEncoder(), dec = new TextDecoder();
 const b64 = a => btoa(String.fromCharCode(...new Uint8Array(a)));
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 
-async function deriveKey(password, salt){
+async function deriveKey(password, salt, iterations){
   const base = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey(
-    {name:'PBKDF2', salt, iterations:PBKDF2_ITER, hash:'SHA-256'},
+    {name:'PBKDF2', salt, iterations: iterations || PBKDF2_ITER, hash:'SHA-256'},
     base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
 }
 async function encryptVault(obj, password){
@@ -478,9 +479,47 @@ async function encryptVault(obj, password){
           salt:b64(salt), iv:b64(iv), data:b64(data)};
 }
 async function decryptVault(blob, password){
-  const key = await deriveKey(password, unb64(blob.salt));
+  const key = await deriveKey(password, unb64(blob.salt), blob.iter);
   const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(blob.iv)}, key, unb64(blob.data));
   return JSON.parse(dec.decode(plain));
+}
+
+/* C-1: normaliza bóvedas antiguas para que cada credencial tenga updatedAt y exista la lista de borrados (tombstones) */
+function normalizeVault(v){
+  v.tombstones = v.tombstones || [];
+  (v.entries||[]).forEach(e=>{ if(!e.updatedAt) e.updatedAt = e.lastChanged || e.createdAt || new Date(0).toISOString(); });
+  return v;
+}
+const TOMBSTONE_DAYS = 180;
+function pruneTombstones(list){
+  const cutoff = Date.now() - TOMBSTONE_DAYS*86400000;
+  return (list||[]).filter(t=>Date.parse(t.deletedAt||0) > cutoff);
+}
+function sortById(list){ return [...(list||[])].sort((a,b)=>String(a.id).localeCompare(String(b.id))); }
+/* Combina credenciales de dos bóvedas por id: gana la versión con updatedAt más reciente.
+   Un borrado (tombstone) cuenta como una versión más — si es la más reciente, la credencial queda eliminada;
+   si se editó después del borrado en otro dispositivo, la edición la revive. */
+function mergeEntries(localEntries, localTomb, remoteEntries, remoteTomb){
+  const tombMap = new Map();
+  (localTomb||[]).forEach(t=>tombMap.set(t.id, t.deletedAt));
+  (remoteTomb||[]).forEach(t=>{
+    const cur = tombMap.get(t.id);
+    if(!cur || t.deletedAt > cur) tombMap.set(t.id, t.deletedAt);
+  });
+  const byId = new Map();
+  (localEntries||[]).forEach(e=>byId.set(e.id, e));
+  (remoteEntries||[]).forEach(e=>{
+    const cur = byId.get(e.id);
+    if(!cur || (e.updatedAt||'') > (cur.updatedAt||'')) byId.set(e.id, e);
+  });
+  const entries = [];
+  byId.forEach((e, id)=>{
+    const delAt = tombMap.get(id);
+    if(delAt && delAt >= (e.updatedAt || e.createdAt || '')) return;
+    entries.push(e);
+  });
+  const tombstones = [...tombMap.entries()].map(([id,deletedAt])=>({id,deletedAt}));
+  return {entries, tombstones};
 }
 
 /* ---------- Persistencia ---------- */
@@ -498,7 +537,7 @@ async function persistQuiet(){
 }
 function newVault(){
   return {version:1, createdAt:new Date().toISOString(),
-    settings:{rotationDays:30, warnDays:5, autolockMin:5}, entries:[]};
+    settings:{rotationDays:30, warnDays:5, autolockMin:5}, entries:[], tombstones:[]};
 }
 
 /* ---------- Bloqueo / desbloqueo ---------- */
@@ -511,9 +550,19 @@ function initLock(){
 }
 function lockMsg(t, cls){ const m=document.getElementById('lockMsg'); m.textContent=t; m.className=cls||''; }
 
+/* I-4: si el navegador no soporta cifrado (Web Crypto) o la página no vive en https/localhost, avisa en vez de quedarse en blanco */
+function checkCompat(){
+  if(window.crypto && window.crypto.subtle) return true;
+  document.getElementById('setupForm').classList.add('hidden');
+  document.getElementById('unlockForm').classList.add('hidden');
+  lockMsg('⚠️ Este navegador o esta conexión no cumple los requisitos de seguridad para abrir tu bóveda (falta cifrado Web Crypto). Ábrela desde una dirección https:// con un navegador actualizado (Chrome, Edge, Safari o Firefox recientes).', 'err');
+  return false;
+}
+
 async function doSetup(){
   const p1 = document.getElementById('setupPw').value, p2 = document.getElementById('setupPw2').value;
   if(p1.length < 10) return lockMsg('La clave debe tener mínimo 10 caracteres.','err');
+  if(passwordScore(p1) < 3) return lockMsg('Tu clave maestra es débil. Hazla más larga o combina mayúsculas, números y símbolos hasta que la barra llegue al menos a amarillo.','err');
   if(p1 !== p2) return lockMsg('Las claves no coinciden.','err');
   masterPw = p1; vault = newVault();
   logEv('🛡️ Bóveda creada');
@@ -526,7 +575,7 @@ async function doUnlock(){
   lockMsg('Descifrando…');
   try{
     const blob = JSON.parse(localStorage.getItem(LS_KEY));
-    vault = await decryptVault(blob, p);
+    vault = normalizeVault(await decryptVault(blob, p));
     masterPw = p;
     document.getElementById('unlockPw').value='';
     logEv('🔓 Desbloqueo con clave maestra'); persistQuiet();
@@ -542,7 +591,7 @@ function importFromLock(){
     if(!pw) return;
     try{
       const blob = JSON.parse(await f.text());
-      vault = await decryptVault(blob, pw);
+      vault = normalizeVault(await decryptVault(blob, pw));
       masterPw = pw; await persist(); enterApp();
     }catch(e){ lockMsg('❌ No se pudo descifrar el archivo. Verifica la clave.','err'); }
   };
@@ -564,11 +613,15 @@ function resetLockTimer(){
 ['click','keydown','touchstart','scroll'].forEach(ev=>document.addEventListener(ev, resetLockTimer, {passive:true}));
 
 /* Medidor de fuerza */
-document.addEventListener('input', e=>{
-  if(e.target.id!=='setupPw') return;
-  const v=e.target.value; let s=0;
+function passwordScore(v){
+  let s=0;
   if(v.length>=10)s++; if(v.length>=14)s++; if(/[A-Z]/.test(v)&&/[a-z]/.test(v))s++;
   if(/\d/.test(v))s++; if(/[^A-Za-z0-9]/.test(v))s++;
+  return s;
+}
+document.addEventListener('input', e=>{
+  if(e.target.id!=='setupPw') return;
+  const s = passwordScore(e.target.value);
   const bar=document.getElementById('strengthBar');
   const pct=[0,20,40,60,80,100][s], col=['#f85149','#f85149','#d29922','#d29922','#3fb950','#3fb950'][s];
   bar.style.width=pct+'%'; bar.style.background=col;
@@ -756,6 +809,7 @@ function copyHist(id, i){
 async function markChanged(id){
   const e = findEntry(id);
   e.lastChanged = new Date().toISOString();
+  e.updatedAt = e.lastChanged;
   logEv('✅ Clave marcada como cambiada: ' + e.aplicacion);
   await persist(); render(); toast(t('✅ Fecha de cambio actualizada'));
 }
@@ -763,6 +817,8 @@ async function delEntry(id){
   const e = findEntry(id);
   if(!confirm(`¿Eliminar "${e.aplicacion}"?`)) return;
   vault.entries = vault.entries.filter(x=>x.id!==id);
+  vault.tombstones = vault.tombstones || [];
+  vault.tombstones.push({id, deletedAt:new Date().toISOString()});
   logEv('🗑️ Credencial eliminada: ' + e.aplicacion);
   await persist(); render(); toast(t('Eliminada'));
 }
@@ -799,11 +855,12 @@ function genInto(){
 async function saveEntry(){
   const g = id=>document.getElementById(id).value.trim();
   if(!g('eEmpresa')||!g('eCiudad')||!g('eApp')) return toast(t('⚠️ Empresa, ciudad y aplicación son obligatorios'));
+  const now = new Date().toISOString();
   const data = {
     empresa:g('eEmpresa'), ciudad:g('eCiudad'), area:g('eArea'), aplicacion:g('eApp'),
     usuario:g('eUser'), password:document.getElementById('ePass').value, url:g('eUrl'),
     rotationDays:parseInt(g('eRotation'))||30, warnDays:parseInt(g('eWarn'))||5,
-    lastChanged:new Date(g('eLastChanged')+'T12:00:00').toISOString(), notas:g('eNotas')
+    lastChanged:new Date(g('eLastChanged')+'T12:00:00').toISOString(), notas:g('eNotas'), updatedAt: now
   };
   if(editingId){
     const e = findEntry(editingId);
@@ -818,7 +875,7 @@ async function saveEntry(){
     logEv((pwChanged? '🔑 Contraseña actualizada: ':'✏️ Credencial editada: ') + data.aplicacion);
   }
   else {
-    vault.entries.push({id:crypto.randomUUID(), createdAt:new Date().toISOString(), ...data});
+    vault.entries.push({id:crypto.randomUUID(), createdAt:now, ...data});
     logEv('➕ Credencial creada: ' + data.aplicacion);
   }
   await persist(); closeEditor(); render(); toast(t('💾 Guardado'));
@@ -862,7 +919,7 @@ async function importVault(file){
   if(!pw) return;
   try{
     const blob = JSON.parse(await file.text());
-    const v = await decryptVault(blob, pw);
+    const v = normalizeVault(await decryptVault(blob, pw));
     if(!confirm(`El archivo contiene ${v.entries.length} credenciales.\n¿Reemplazar los datos de este dispositivo?`)) return;
     vault = v; masterPw = pw;
     logEv(`📥 Bóveda restaurada desde archivo (${v.entries.length} credenciales)`);
@@ -891,6 +948,7 @@ async function changeMaster(){
   const o=document.getElementById('chOld').value, n=document.getElementById('chNew').value, n2=document.getElementById('chNew2').value;
   if(o!==masterPw) return toast('❌ Clave actual incorrecta');
   if(n.length<10) return toast('⚠️ Mínimo 10 caracteres');
+  if(passwordScore(n)<3) return toast('⚠️ Esa clave es débil. Combina mayúsculas, números y símbolos, o hazla más larga.');
   if(n!==n2) return toast('⚠️ Las claves nuevas no coinciden');
   masterPw = n;
   logEv('🔐 Clave maestra cambiada');
@@ -902,7 +960,7 @@ async function changeMaster(){
 function wipeAll(){
   if(!confirm('¿Seguro? Se borrará TODO en este dispositivo.')) return;
   if(!confirm('Última confirmación: ¿ya exportaste tu respaldo .tsi?')) return;
-  localStorage.removeItem(LS_KEY); location.reload();
+  localStorage.removeItem(LS_KEY); localStorage.removeItem(BIO_KEY); location.reload();
 }
 
 /* ---------- Idioma (Español / English) ---------- */
@@ -1205,7 +1263,7 @@ async function bioUnlock(){
     const key = await crypto.subtle.importKey('raw', secret, 'AES-GCM', false, ['decrypt']);
     const pw = dec.decode(await crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(c.iv)}, key, unb64(c.ct)));
     const blob = JSON.parse(localStorage.getItem(LS_KEY));
-    vault = await decryptVault(blob, pw);
+    vault = normalizeVault(await decryptVault(blob, pw));
     masterPw = pw; lockMsg('');
     logEv('🖐️ Desbloqueo con huella'); persistQuiet();
     enterApp();
@@ -1318,25 +1376,38 @@ async function driveSync(auto){
         setSyncStatus('❌ El archivo de Drive usa OTRA clave maestra. Usa la misma clave en todos los dispositivos.');
         syncing = false; return;
       }
+      normalizeVault(remote);
+      // C-1: combina credencial por credencial (por id + fecha de edición) en vez de "todo o nada",
+      // para no perder cambios hechos en otro dispositivo entre una sincronización y otra.
+      const localEntriesBefore = vault.entries, localTombBefore = vault.tombstones || [];
+      const { entries: mergedEntries, tombstones: mergedTomb } = mergeEntries(localEntriesBefore, localTombBefore, remote.entries, remote.tombstones);
+      const prunedTomb = pruneTombstones(mergedTomb);
       const rT = Date.parse(remote.updatedAt || 0), lT = Date.parse(vault.updatedAt || 0);
-      if(rT > lT){
-        vault.activity = mergeActivity(remote);
-        vault.entries = remote.entries;
-        vault.settings = remote.settings || vault.settings;
-        vault.profile = remote.profile || vault.profile;
-        vault.updatedAt = remote.updatedAt;
-        logEv('⬇️ Datos actualizados desde Drive');
+      if(rT > lT){ vault.settings = remote.settings || vault.settings; vault.profile = remote.profile || vault.profile; }
+      vault.activity = mergeActivity(remote);
+      vault.entries = mergedEntries;
+      vault.tombstones = prunedTomb;
+
+      const changedLocally = JSON.stringify(sortById(mergedEntries)) !== JSON.stringify(sortById(localEntriesBefore))
+        || JSON.stringify(sortById(prunedTomb)) !== JSON.stringify(sortById(localTombBefore));
+      const remoteNeedsUpdate = JSON.stringify(sortById(mergedEntries)) !== JSON.stringify(sortById(remote.entries))
+        || JSON.stringify(sortById(prunedTomb)) !== JSON.stringify(sortById(remote.tombstones));
+
+      if(changedLocally || rT > lT){
+        vault.updatedAt = new Date().toISOString();
+        logEv(changedLocally ? '🔀 Credenciales combinadas con Drive' : '⬇️ Datos actualizados desde Drive');
         await persistQuiet();
         loadSettingsUI(); render();
-        setSyncStatus('⬇️ Datos actualizados desde Drive ('+vault.entries.length+' credenciales)');
-        toast('⬇️ Sincronizado desde Drive');
-      } else if(lT > rT){
-        await driveUpload(tok, id);
-        logEv('⬆️ Drive actualizado'); persistQuiet();
-        setSyncStatus('⬆️ Drive actualizado ('+vault.entries.length+' credenciales)');
-      } else {
-        setSyncStatus('✅ Todo sincronizado ('+vault.entries.length+' credenciales)');
       }
+      if(remoteNeedsUpdate){
+        await driveUpload(tok, id);
+        logEv('⬆️ Drive actualizado con la combinación'); persistQuiet();
+      }
+      if(changedLocally && remoteNeedsUpdate) setSyncStatus('🔀 Combinado entre dispositivos ('+vault.entries.length+' credenciales)');
+      else if(changedLocally) setSyncStatus('⬇️ Datos actualizados desde Drive ('+vault.entries.length+' credenciales)');
+      else if(remoteNeedsUpdate) setSyncStatus('⬆️ Drive actualizado ('+vault.entries.length+' credenciales)');
+      else setSyncStatus('✅ Todo sincronizado ('+vault.entries.length+' credenciales)');
+      if(changedLocally && !auto) toast('🔀 Sincronizado y combinado con Drive');
     }
     if(!auto) toast('☁️ Sincronización completa');
   }catch(e){
@@ -1400,7 +1471,7 @@ document.addEventListener('keydown', e=>{
 
 applyLook();
 applyLang();
-initLock();
+if(checkCompat()) initLock();
 /* fin */
 </script>
 </body>
