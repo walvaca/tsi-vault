@@ -33,6 +33,7 @@ label{display:block;font-size:12.5px;color:var(--muted);margin:12px 0 5px;font-w
 
 /* ===== Pantalla de bloqueo ===== */
 #lockScreen{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 30%,var(--bg2) 0%,var(--bg) 70%);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+#recoveryScreen{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 30%,var(--bg2) 0%,var(--bg) 70%);display:flex;align-items:center;justify-content:center;z-index:101;padding:20px}
 .lock-card{width:100%;max-width:400px;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:34px 28px;box-shadow:var(--shadow);text-align:center}
 .logo{width:64px;height:64px;margin:0 auto 14px;background:linear-gradient(135deg,#2f81f7,#1a4b91);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:30px}
 .lock-card h1{font-size:21px;margin-bottom:2px}
@@ -155,7 +156,7 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
       </div>
       <button class="btn" style="width:100%;margin-top:18px" onclick="doSetup()">Crear bóveda cifrada</button>
       <div style="margin-top:14px;font-size:12px;color:var(--muted);text-align:left;line-height:1.6">
-        ⚠️ <b>Importante:</b> la clave maestra NO se guarda en ningún lugar y NO se puede recuperar. Si la olvidas, no podrás abrir tus datos. Memorízala bien.
+        ⚠️ <b>Importante:</b> la clave maestra NO se guarda en ningún lugar. Al crear la bóveda te daremos una <b>Llave de Recuperación</b> — guárdala aparte: es la única forma de entrar si olvidas tu clave.
       </div>
       <button class="btn-sec btn" style="width:100%;margin-top:12px" onclick="importFromLock()">📂 Restaurar desde archivo .tsi</button>
     </div>
@@ -163,11 +164,42 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
     <!-- Desbloquear -->
     <div id="unlockForm" class="hidden">
       <input type="password" id="unlockPw" placeholder="Clave maestra" autocomplete="current-password" style="text-align:center">
+      <div style="font-size:11.5px;color:var(--muted);margin-top:8px">¿Olvidaste tu clave? También puedes escribir aquí tu Llave de Recuperación.</div>
       <button class="btn" style="width:100%;margin-top:14px" onclick="doUnlock()">🔓 Desbloquear</button>
       <button class="btn btn-sec hidden" id="bioBtn" style="width:100%;margin-top:10px" onclick="bioUnlock()">🖐️ Desbloquear con huella</button>
       <button class="btn-sec btn" style="width:100%;margin-top:10px" onclick="importFromLock()">📂 Restaurar desde archivo .tsi</button>
     </div>
+
+    <!-- Restablecer clave tras entrar con la Llave de Recuperación -->
+    <div id="resetPwScreen" class="hidden">
+      <div style="text-align:left">
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Entraste con tu Llave de Recuperación. Antes de continuar, crea una nueva clave maestra para el día a día.</p>
+        <label>Nueva clave maestra</label>
+        <input type="password" id="resetPw1" placeholder="Mínimo 10 caracteres" autocomplete="new-password">
+        <label>Confirma la nueva clave maestra</label>
+        <input type="password" id="resetPw2" autocomplete="new-password">
+      </div>
+      <button class="btn" style="width:100%;margin-top:18px" onclick="confirmPasswordReset()">Guardar nueva clave maestra</button>
+    </div>
     <div id="lockMsg"></div>
+  </div>
+</div>
+
+<!-- ============ LLAVE DE RECUPERACIÓN (pantalla única) ============ -->
+<div id="recoveryScreen" class="hidden">
+  <div class="lock-card" style="max-width:460px">
+    <div class="logo">🗝️</div>
+    <h1 id="recoveryTitle">Guarda tu Llave de Recuperación</h1>
+    <div class="sub" style="text-align:left">Este código abre tu bóveda igual que tu clave maestra — es tu respaldo si algún día la olvidas. <b>Solo se muestra esta vez</b>, TSI Vault no la guarda en ningún lado.</div>
+    <div class="gen-out" style="margin:16px 0;font-size:16.5px;justify-content:center">
+      <span id="recoveryKeyText" style="letter-spacing:.5px"></span>
+      <button class="icon-btn" onclick="copyText(document.getElementById('recoveryKeyText').textContent,'Llave copiada')">📋</button>
+    </div>
+    <label style="display:flex;align-items:flex-start;gap:8px;text-transform:none;font-weight:400;color:var(--text);cursor:pointer;margin-top:6px">
+      <input type="checkbox" id="recoveryConfirm" style="width:auto;margin-top:3px" onchange="document.getElementById('recoveryContinueBtn').disabled = !this.checked">
+      <span>Ya guardé esta llave en un lugar seguro (impresa en tu caja fuerte, o en otro gestor de contraseñas)</span>
+    </label>
+    <button class="btn" id="recoveryContinueBtn" style="width:100%;margin-top:16px" disabled onclick="recoveryScreenContinue()">Continuar</button>
   </div>
 </div>
 
@@ -280,9 +312,9 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
       <div class="sec-head" onclick="backToMenu()">‹ Volver</div>
       <div class="set-card" style="text-align:center">
         <div class="logo" style="margin:0 auto 12px">🛡️</div>
-        <h4>TSI Vault <span id="aboutVer">v1.7</span></h4>
+        <h4>TSI Vault <span id="aboutVer">v1.8</span></h4>
         <p style="margin-top:8px">Gestor cifrado de credenciales de seguridad<br><b>TSI — Technology &amp; Security Intelligence</b><br>Bogotá, Colombia</p>
-        <p style="font-size:11.5px;margin-bottom:0">AES-256-GCM · PBKDF2 600.000 iteraciones<br>Sincronización Google Drive · Biometría (WebAuthn PRF)<br>Tus datos nunca salen de tus dispositivos sin cifrar.</p>
+        <p style="font-size:11.5px;margin-bottom:0">AES-256-GCM · PBKDF2 600.000 iteraciones · Llave de Recuperación<br>Sincronización Google Drive · Biometría (WebAuthn PRF)<br>Tus datos nunca salen de tus dispositivos sin cifrar.</p>
       </div>
     </div>
 
@@ -387,6 +419,11 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
       <button class="btn" style="margin-top:12px" onclick="changeMaster()">Cambiar clave</button>
     </div>
     <div class="set-card">
+      <h4>🗝️ Llave de Recuperación</h4>
+      <p>Por seguridad, no la guardamos en ningún lado después de mostrártela una vez — si la perdiste o no la guardaste, genera una nueva (esto invalida la anterior).</p>
+      <button class="btn btn-sec" onclick="regenerateRecoveryKey()">Generar nueva Llave de Recuperación</button>
+    </div>
+    <div class="set-card">
       <h4 style="color:var(--red)">🗑️ Borrar todo en este dispositivo</h4>
       <p>Elimina la bóveda de este navegador. Exporta primero tu respaldo .tsi.</p>
       <button class="btn-danger btn" onclick="wipeAll()">Borrar bóveda local</button>
@@ -452,6 +489,8 @@ const LS_KEY = 'tsi_vault_v1';
 const PBKDF2_ITER = 600000; // I-1: reforzado (antes 310.000). decryptVault usa blob.iter, no esta constante, para no romper bóvedas ya cifradas.
 let vault = null;        // datos descifrados en memoria
 let masterPw = null;     // clave maestra en memoria (solo sesión)
+let dek = null;           // C-2: llave real que cifra los datos (32 bytes), envuelta por clave maestra y por la Llave de Recuperación
+let currentWraps = null;  // {password:{...}, recovery:{...}} — copias envueltas de la dek
 let editingId = null;
 let dashFilter = '';
 let lockTimer = null;
@@ -470,18 +509,49 @@ async function deriveKey(password, salt, iterations){
     {name:'PBKDF2', salt, iterations: iterations || PBKDF2_ITER, hash:'SHA-256'},
     base, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
 }
-async function encryptVault(obj, password){
+/* C-2: cada bóveda tiene una llave de datos (DEK) aleatoria que cifra el contenido.
+   Esa DEK se guarda "envuelta" dos veces — una con la clave maestra y otra con la
+   Llave de Recuperación — así que cualquiera de las dos abre la misma bóveda. */
+async function wrapDEK(dekBytes, secret){
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveKey(password, salt);
-  const data = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(JSON.stringify(obj)));
-  return {app:'TSI-Vault', v:1, kdf:'PBKDF2-SHA256', iter:PBKDF2_ITER,
-          salt:b64(salt), iv:b64(iv), data:b64(data)};
+  const key = await deriveKey(secret, salt);
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, dekBytes);
+  return {salt:b64(salt), iv:b64(iv), iter:PBKDF2_ITER, ct:b64(ct)};
 }
-async function decryptVault(blob, password){
-  const key = await deriveKey(password, unb64(blob.salt), blob.iter);
-  const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(blob.iv)}, key, unb64(blob.data));
-  return JSON.parse(dec.decode(plain));
+const RECOVERY_ALPHABET = '23456789ABCDEFGHJKMNPQRSTVWXYZ'; // sin 0,O,1,I,L para que no se confunda al escribirla a mano
+function generateRecoveryKey(){
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  let s = ''; for(let i=0;i<24;i++) s += RECOVERY_ALPHABET[bytes[i] % RECOVERY_ALPHABET.length];
+  return 'TSI-' + s.match(/.{1,4}/g).join('-');
+}
+async function buildBlob(){
+  const dekKey = await crypto.subtle.importKey('raw', dek, 'AES-GCM', false, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, dekKey, enc.encode(JSON.stringify(vault)));
+  return {app:'TSI-Vault', v:2, kdf:'PBKDF2-SHA256', data:{iv:b64(iv), ct:b64(ct)}, wraps: currentWraps};
+}
+/* Descifra con la clave maestra O con la Llave de Recuperación (prueba las dos).
+   Formato viejo (sin "wraps"): la clave cifraba los datos directo, sin DEK — se conserva
+   la lectura para no romper bóvedas creadas antes de este cambio. */
+async function decryptVault(blob, secret){
+  if(!blob.wraps){
+    const key = await deriveKey(secret, unb64(blob.salt), blob.iter);
+    const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(blob.iv)}, key, unb64(blob.data));
+    return {vaultObj: JSON.parse(dec.decode(plain)), dek:null, wraps:null, unlockedVia:'legacy'};
+  }
+  for(const via of ['password','recovery']){
+    const wrap = blob.wraps[via];
+    if(!wrap) continue;
+    try{
+      const key = await deriveKey(secret, unb64(wrap.salt), wrap.iter);
+      const dekBytes = new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(wrap.iv)}, key, unb64(wrap.ct)));
+      const dekKey = await crypto.subtle.importKey('raw', dekBytes, 'AES-GCM', false, ['decrypt']);
+      const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(blob.data.iv)}, dekKey, unb64(blob.data.ct));
+      return {vaultObj: JSON.parse(dec.decode(plain)), dek:dekBytes, wraps:blob.wraps, unlockedVia:via};
+    }catch(e){ /* prueba con la otra llave */ }
+  }
+  throw new Error('No se pudo descifrar');
 }
 
 /* C-1: normaliza bóvedas antiguas para que cada credencial tenga updatedAt y exista la lista de borrados (tombstones) */
@@ -524,15 +594,16 @@ function mergeEntries(localEntries, localTomb, remoteEntries, remoteTomb){
 
 /* ---------- Persistencia ---------- */
 async function persist(){
-  if(!vault || !masterPw) return;
+  if(!vault || !dek) return;
   vault.updatedAt = new Date().toISOString();
-  const blob = await encryptVault(vault, masterPw);
+  const blob = await buildBlob();
   localStorage.setItem(LS_KEY, JSON.stringify(blob));
   scheduleAutoSync();
 }
 /* Guarda sin cambiar updatedAt (para aplicar datos que vienen de Drive) */
 async function persistQuiet(){
-  const blob = await encryptVault(vault, masterPw);
+  if(!vault || !dek) return;
+  const blob = await buildBlob();
   localStorage.setItem(LS_KEY, JSON.stringify(blob));
 }
 function newVault(){
@@ -545,6 +616,8 @@ function initLock(){
   const has = !!localStorage.getItem(LS_KEY);
   document.getElementById('setupForm').classList.toggle('hidden', has);
   document.getElementById('unlockForm').classList.toggle('hidden', !has);
+  document.getElementById('resetPwScreen').classList.add('hidden');
+  document.getElementById('recoveryScreen').classList.add('hidden');
   updateBioUI();
   setTimeout(()=>document.getElementById(has?'unlockPw':'setupPw').focus(), 200);
 }
@@ -565,19 +638,89 @@ async function doSetup(){
   if(passwordScore(p1) < 3) return lockMsg('Tu clave maestra es débil. Hazla más larga o combina mayúsculas, números y símbolos hasta que la barra llegue al menos a amarillo.','err');
   if(p1 !== p2) return lockMsg('Las claves no coinciden.','err');
   masterPw = p1; vault = newVault();
+  dek = crypto.getRandomValues(new Uint8Array(32));
+  const recoveryKey = generateRecoveryKey();
+  currentWraps = { password: await wrapDEK(dek, p1), recovery: await wrapDEK(dek, recoveryKey) };
   logEv('🛡️ Bóveda creada');
   await persist();
-  enterApp();
+  showRecoveryScreen(recoveryKey, enterApp, false);
 }
+
+/* Aplica lo que devolvió decryptVault. Si la bóveda era del formato viejo (sin Llave de
+   Recuperación) o si se desbloqueó con la Llave de Recuperación en vez de la clave maestra,
+   muestra la pantalla correspondiente y devuelve true (el llamador debe detenerse ahí). */
+async function applyUnlockResult(r, enteredSecret, afterContinue){
+  vault = normalizeVault(r.vaultObj);
+  if(r.unlockedVia === 'legacy'){
+    masterPw = enteredSecret;
+    logEv('🔓 Desbloqueo con clave maestra');
+    dek = crypto.getRandomValues(new Uint8Array(32));
+    const recoveryKey = generateRecoveryKey();
+    currentWraps = { password: await wrapDEK(dek, enteredSecret), recovery: await wrapDEK(dek, recoveryKey) };
+    await persist();
+    showRecoveryScreen(recoveryKey, afterContinue, true);
+    return true;
+  }
+  dek = r.dek; currentWraps = r.wraps;
+  if(r.unlockedVia === 'recovery'){
+    logEv('🔑 Desbloqueo con Llave de Recuperación — clave maestra pendiente de restablecer');
+    await persistQuiet();
+    showForcedPasswordReset(afterContinue);
+    return true;
+  }
+  masterPw = enteredSecret;
+  return false;
+}
+function showRecoveryScreen(key, onContinue, isUpgrade){
+  document.getElementById('lockScreen').classList.add('hidden');
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('recoveryTitle').textContent = isUpgrade ? 'Mejoramos la seguridad de tu bóveda' : 'Guarda tu Llave de Recuperación';
+  document.getElementById('recoveryKeyText').textContent = key;
+  document.getElementById('recoveryConfirm').checked = false;
+  document.getElementById('recoveryContinueBtn').disabled = true;
+  document.getElementById('recoveryScreen').classList.remove('hidden');
+  window.__recoveryContinueFn = onContinue;
+}
+function recoveryScreenContinue(){
+  document.getElementById('recoveryScreen').classList.add('hidden');
+  const fn = window.__recoveryContinueFn; window.__recoveryContinueFn = null;
+  if(fn) fn();
+}
+function showForcedPasswordReset(onDone){
+  document.getElementById('lockScreen').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('recoveryScreen').classList.add('hidden');
+  document.getElementById('setupForm').classList.add('hidden');
+  document.getElementById('unlockForm').classList.add('hidden');
+  document.getElementById('resetPwScreen').classList.remove('hidden');
+  document.getElementById('resetPw1').value=''; document.getElementById('resetPw2').value='';
+  lockMsg('');
+  window.__afterResetFn = onDone;
+}
+async function confirmPasswordReset(){
+  const p1 = document.getElementById('resetPw1').value, p2 = document.getElementById('resetPw2').value;
+  if(p1.length < 10) return lockMsg('La clave debe tener mínimo 10 caracteres.','err');
+  if(passwordScore(p1) < 3) return lockMsg('Esa clave es débil. Combina mayúsculas, números y símbolos, o hazla más larga.','err');
+  if(p1 !== p2) return lockMsg('Las claves no coinciden.','err');
+  currentWraps.password = await wrapDEK(dek, p1);
+  masterPw = p1;
+  logEv('🔐 Clave maestra restablecida con la Llave de Recuperación');
+  await persist();
+  document.getElementById('resetPwScreen').classList.add('hidden');
+  document.getElementById('resetPw1').value=''; document.getElementById('resetPw2').value='';
+  const fn = window.__afterResetFn; window.__afterResetFn = null;
+  if(fn) fn();
+}
+
 async function doUnlock(){
-  const p = document.getElementById('unlockPw').value;
+  const p = document.getElementById('unlockPw').value.trim();
   if(!p) return;
   lockMsg('Descifrando…');
   try{
     const blob = JSON.parse(localStorage.getItem(LS_KEY));
-    vault = normalizeVault(await decryptVault(blob, p));
-    masterPw = p;
+    const r = await decryptVault(blob, p);
     document.getElementById('unlockPw').value='';
+    if(await applyUnlockResult(r, p, enterApp)) return;
     logEv('🔓 Desbloqueo con clave maestra'); persistQuiet();
     enterApp();
   }catch(e){ lockMsg('❌ Clave incorrecta o datos dañados.','err'); }
@@ -591,14 +734,15 @@ function importFromLock(){
     if(!pw) return;
     try{
       const blob = JSON.parse(await f.text());
-      vault = normalizeVault(await decryptVault(blob, pw));
-      masterPw = pw; await persist(); enterApp();
+      const r = await decryptVault(blob, pw);
+      if(await applyUnlockResult(r, pw, enterApp)) return;
+      await persist(); enterApp();
     }catch(e){ lockMsg('❌ No se pudo descifrar el archivo. Verifica la clave.','err'); }
   };
   inp.click();
 }
 function lockNow(){
-  vault=null; masterPw=null;
+  vault=null; masterPw=null; dek=null; currentWraps=null;
   document.getElementById('app').classList.add('hidden');
   document.getElementById('lockScreen').classList.remove('hidden');
   lockMsg('');
@@ -904,7 +1048,7 @@ function runGenerator(){
 
 /* ---------- Exportar / Importar ---------- */
 async function exportVault(){
-  const blob = await encryptVault(vault, masterPw);
+  const blob = await buildBlob();
   const f = new Blob([JSON.stringify(blob)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(f);
@@ -919,11 +1063,15 @@ async function importVault(file){
   if(!pw) return;
   try{
     const blob = JSON.parse(await file.text());
-    const v = normalizeVault(await decryptVault(blob, pw));
-    if(!confirm(`El archivo contiene ${v.entries.length} credenciales.\n¿Reemplazar los datos de este dispositivo?`)) return;
-    vault = v; masterPw = pw;
-    logEv(`📥 Bóveda restaurada desde archivo (${v.entries.length} credenciales)`);
-    await persist(); loadSettingsUI(); render(); toast('📥 Bóveda restaurada');
+    const r = await decryptVault(blob, pw);
+    const count = (r.vaultObj.entries||[]).length;
+    if(!confirm(`El archivo contiene ${count} credenciales.\n¿Reemplazar los datos de este dispositivo?`)) return;
+    const finish = async ()=>{
+      logEv(`📥 Bóveda restaurada desde archivo (${count} credenciales)`);
+      await persist(); loadSettingsUI(); render(); toast('📥 Bóveda restaurada');
+    };
+    if(await applyUnlockResult(r, pw, finish)) return;
+    await finish();
   }catch(e){ toast('❌ Clave incorrecta o archivo inválido'); }
   document.getElementById('importFile').value='';
 }
@@ -950,17 +1098,26 @@ async function changeMaster(){
   if(n.length<10) return toast('⚠️ Mínimo 10 caracteres');
   if(passwordScore(n)<3) return toast('⚠️ Esa clave es débil. Combina mayúsculas, números y símbolos, o hazla más larga.');
   if(n!==n2) return toast('⚠️ Las claves nuevas no coinciden');
+  currentWraps.password = await wrapDEK(dek, n);
   masterPw = n;
   logEv('🔐 Clave maestra cambiada');
   await persist();
   ['chOld','chNew','chNew2'].forEach(id=>document.getElementById(id).value='');
   if(bioConfigured()){ localStorage.removeItem(BIO_KEY); updateBioUI(); toast('🔑 Clave actualizada. La huella se desactivó — vuelve a activarla.'); }
-  else toast('🔑 Clave maestra actualizada. Exporta un nuevo respaldo .tsi.');
+  else toast('🔑 Clave maestra actualizada. Tu Llave de Recuperación anterior sigue funcionando.');
 }
 function wipeAll(){
   if(!confirm('¿Seguro? Se borrará TODO en este dispositivo.')) return;
   if(!confirm('Última confirmación: ¿ya exportaste tu respaldo .tsi?')) return;
   localStorage.removeItem(LS_KEY); localStorage.removeItem(BIO_KEY); location.reload();
+}
+async function regenerateRecoveryKey(){
+  if(!confirm('Esto invalida tu Llave de Recuperación anterior (si la tenías impresa, ya no servirá). ¿Continuar?')) return;
+  const recoveryKey = generateRecoveryKey();
+  currentWraps.recovery = await wrapDEK(dek, recoveryKey);
+  logEv('🗝️ Llave de Recuperación regenerada');
+  await persist();
+  showRecoveryScreen(recoveryKey, ()=>document.getElementById('app').classList.remove('hidden'), false);
 }
 
 /* ---------- Idioma (Español / English) ---------- */
@@ -1263,8 +1420,9 @@ async function bioUnlock(){
     const key = await crypto.subtle.importKey('raw', secret, 'AES-GCM', false, ['decrypt']);
     const pw = dec.decode(await crypto.subtle.decrypt({name:'AES-GCM', iv:unb64(c.iv)}, key, unb64(c.ct)));
     const blob = JSON.parse(localStorage.getItem(LS_KEY));
-    vault = normalizeVault(await decryptVault(blob, pw));
-    masterPw = pw; lockMsg('');
+    const r = await decryptVault(blob, pw);
+    lockMsg('');
+    if(await applyUnlockResult(r, pw, enterApp)) return;
     logEv('🖐️ Desbloqueo con huella'); persistQuiet();
     enterApp();
   }catch(e){ lockMsg('❌ No se pudo desbloquear con huella. Usa tu clave maestra.','err'); }
@@ -1318,7 +1476,7 @@ async function getToken(interactive){
   });
 }
 async function driveUpload(tok, id){
-  const blob = await encryptVault(vault, masterPw);
+  const blob = await buildBlob();
   const body = JSON.stringify(blob);
   if(id){
     const r = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`,
@@ -1371,7 +1529,7 @@ async function driveSync(auto){
       if(!dr.ok) throw new Error('download '+dr.status);
       const blob = await dr.json();
       let remote;
-      try{ remote = await decryptVault(blob, masterPw); }
+      try{ remote = (await decryptVault(blob, masterPw)).vaultObj; }
       catch(e){
         setSyncStatus('❌ El archivo de Drive usa OTRA clave maestra. Usa la misma clave en todos los dispositivos.');
         syncing = false; return;
