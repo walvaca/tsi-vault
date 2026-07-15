@@ -1691,6 +1691,9 @@ document.addEventListener('keydown', e=>{
 applyLook();
 applyLang();
 if(checkCompat()) initLock();
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
 /* fin */
 </script>
 </body>
