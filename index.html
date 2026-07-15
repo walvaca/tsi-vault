@@ -575,10 +575,15 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
 const LS_KEY = 'tsi_vault_v1';
 const PBKDF2_ITER = 600000; // I-1: reforzado (antes 310.000). decryptVault usa blob.iter, no esta constante, para no romper bóvedas ya cifradas.
 
-/* Versión de prueba: máx. FREE_ENTRY_LIMIT credenciales hasta ingresar el código de desbloqueo.
-   Se guarda el hash SHA-256 del código (no el código en texto plano) para no dejarlo a la vista en el código fuente público. */
+/* Versión de prueba: máx. FREE_ENTRY_LIMIT credenciales hasta ingresar un código de desbloqueo válido.
+   Se guarda el hash SHA-256 de cada código (nunca el código en texto plano) para no dejarlo a la vista
+   en el código fuente público. Cada cliente formal debe tener su PROPIO código (generado con
+   generador-codigos.html) — así, si el código de un cliente se filtra, no afecta a los demás.
+   Para dar de alta un cliente nuevo: generar su código, agregar aquí el hash que entrega la herramienta. */
 const FREE_ENTRY_LIMIT = 5;
-const UNLOCK_CODE_HASH = '50f147152a735b00a8b9f59bd5801c32e4d77465bc86c67e7ecfb5938bcd7444';
+const UNLOCK_CODE_HASHES = [
+  '50f147152a735b00a8b9f59bd5801c32e4d77465bc86c67e7ecfb5938bcd7444', // TSI-2026-FULL (código de pruebas/demo)
+];
 async function sha256Hex(str){
   const buf = await crypto.subtle.digest('SHA-256', enc.encode(str.trim().toUpperCase()));
   return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -586,7 +591,7 @@ async function sha256Hex(str){
 async function tryUnlockCode(code){
   if(!code) return false;
   const hash = await sha256Hex(code);
-  if(hash !== UNLOCK_CODE_HASH) return false;
+  if(!UNLOCK_CODE_HASHES.includes(hash)) return false;
   vault.settings.unlimited = true;
   logEv('🔓 Versión completa desbloqueada');
   await persist();
