@@ -325,6 +325,11 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
         <p style="margin-top:8px">Gestor cifrado de credenciales de seguridad<br><b>TSI — Technology &amp; Security Intelligence</b><br>Bogotá, Colombia</p>
         <p style="font-size:11.5px;margin-bottom:0">AES-256-GCM · PBKDF2 600.000 iteraciones · Llave de Recuperación<br>Sincronización Google Drive · Biometría (WebAuthn PRF)<br>Tus datos nunca salen de tus dispositivos sin cifrar.</p>
       </div>
+      <div class="set-card">
+        <h4>📤 Compartir</h4>
+        <p>Invita a alguien a probar TSI Vault. Al abrir el enlace, esa persona crea su propia bóveda cifrada con su propia clave — separada de la tuya, nadie ve los datos de nadie más.</p>
+        <button class="btn btn-sec" onclick="shareApp()">📤 Compartir enlace</button>
+      </div>
     </div>
 
     <div id="secLook" class="hidden">
@@ -976,6 +981,18 @@ async function copyText(t, msg){
   try{ await navigator.clipboard.writeText(t); toast(msg||'Copiado'); }
   catch(e){ toast('No se pudo copiar'); }
 }
+/* Comparte el enlace de la app. Cada persona que lo abre crea su propia bóveda,
+   aislada por su propio navegador — no hay nada que compartir aparte del enlace. */
+async function shareApp(){
+  const url = location.origin + location.pathname;
+  const text = t('Te comparto TSI Vault, el gestor de credenciales cifrado que uso.');
+  if(navigator.share){
+    try{ await navigator.share({title:'TSI Vault', text, url}); }
+    catch(e){ /* el usuario canceló el panel de compartir */ }
+  } else {
+    await copyText(url, t('🔗 Enlace copiado, pégalo donde quieras compartirlo'));
+  }
+}
 function toggleHist(id){
   document.getElementById('hist-'+id).classList.toggle('hidden');
 }
@@ -1190,6 +1207,10 @@ const DICT = {
   '🎨 Apariencia':'🎨 Appearance','☁️ Sincronización automática':'☁️ Automatic sync',
   '💾 Respaldo manual (.tsi)':'💾 Manual backup (.tsi)','🔔 Alertas y tiempos':'🔔 Alerts & timing',
   '🔐 Seguridad':'🔐 Security','ℹ️ TSI Vault':'ℹ️ TSI Vault','‹ Volver':'‹ Back',
+  '📤 Compartir':'📤 Share','📤 Compartir enlace':'📤 Share link',
+  'Invita a alguien a probar TSI Vault. Al abrir el enlace, esa persona crea su propia bóveda cifrada con su propia clave — separada de la tuya, nadie ve los datos de nadie más.':'Invite someone to try TSI Vault. When they open the link, that person creates their own encrypted vault with their own password — separate from yours, nobody sees anyone else\'s data.',
+  'Te comparto TSI Vault, el gestor de credenciales cifrado que uso.':'Sharing TSI Vault with you, the encrypted credential manager I use.',
+  '🔗 Enlace copiado, pégalo donde quieras compartirlo':'🔗 Link copied, paste it wherever you want to share it',
   // Apariencia
   'Tema de color':'Color theme','Fuente':'Font','Tamaño de letra':'Font size',
   'Sistema (moderna)':'System (modern)','Clásica (serif)':'Classic (serif)','Técnica (monoespaciada)':'Technical (monospace)',
