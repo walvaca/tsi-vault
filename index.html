@@ -63,7 +63,7 @@ header h2 span{display:block;font-size:11px;color:var(--muted);font-weight:400}
 #alertBanner b{color:var(--red)}
 
 /* Filtros */
-.filters{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.filters{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
 .search-row{display:flex;gap:8px;margin-bottom:10px}
 .search-row input{flex:1}
 
@@ -224,6 +224,15 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
       <input type="search" id="search" placeholder="🔍 Buscar aplicación, usuario, sede…" oninput="render()">
     </div>
     <div class="filters">
+      <select id="fTipo" onchange="render()">
+        <option value="">Tipo: todos</option>
+        <option value="dvr">📹 DVR / Cámara</option>
+        <option value="alarma">🚨 Alarma</option>
+        <option value="red">🌐 Red / Router</option>
+        <option value="correo">✉️ Correo</option>
+        <option value="app">🗂️ Aplicación</option>
+        <option value="otro">🔑 Otro</option>
+      </select>
       <select id="fEmpresa" onchange="render()"><option value="">Empresa: todas</option></select>
       <select id="fCiudad" onchange="render()"><option value="">Ciudad: todas</option></select>
       <select id="fArea" onchange="render()"><option value="">Área: todas</option></select>
@@ -445,15 +454,26 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
 <div class="modal hidden" id="editorModal">
   <div class="modal-card">
     <h3 id="editorTitle">Nueva credencial</h3>
-    <p style="font-size:12.5px;color:var(--muted)">Organiza por empresa, ciudad y área para encontrarla rápido.</p>
+    <p style="font-size:12.5px;color:var(--muted)">Organiza por tipo, empresa, ciudad y área para encontrarla rápido.</p>
     <div class="row2">
       <div><label>Empresa *</label><input id="eEmpresa" list="dlEmpresa" placeholder="Ej: Manufactura S.A."><datalist id="dlEmpresa"></datalist></div>
       <div><label>Ciudad *</label><input id="eCiudad" list="dlCiudad" placeholder="Ej: Bogotá"><datalist id="dlCiudad"></datalist></div>
     </div>
     <div class="row2">
+      <div><label>Tipo de credencial</label>
+        <select id="eTipo">
+          <option value="dvr">📹 DVR / Cámara</option>
+          <option value="alarma">🚨 Alarma</option>
+          <option value="red">🌐 Red / Router</option>
+          <option value="correo">✉️ Correo</option>
+          <option value="app">🗂️ Aplicación</option>
+          <option value="otro">🔑 Otro</option>
+        </select>
+      </div>
       <div><label>Área / Sede</label><input id="eArea" list="dlArea" placeholder="Ej: CCTV, Alarmas, Sede Norte"><datalist id="dlArea"></datalist></div>
-      <div><label>Aplicación / Equipo *</label><input id="eApp" placeholder="Ej: PSS Smart Lite — DVR 01"></div>
     </div>
+    <label>Aplicación / Equipo *</label>
+    <input id="eApp" placeholder="Ej: PSS Smart Lite — DVR 01">
     <label>Usuario</label>
     <input id="eUser" placeholder="admin" autocomplete="off">
     <label>Contraseña</label>
@@ -796,6 +816,17 @@ function statusOf(e){
 /* ---------- Render ---------- */
 function esc(s){ return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+/* F-1: tipo de credencial (DVR, alarma, red…), para filtrar y reconocer de un vistazo */
+const TIPOS = {
+  dvr:    {ic:'📹', es:'DVR / Cámara', en:'DVR / Camera'},
+  alarma: {ic:'🚨', es:'Alarma', en:'Alarm'},
+  red:    {ic:'🌐', es:'Red / Router', en:'Network / Router'},
+  correo: {ic:'✉️', es:'Correo', en:'Email'},
+  app:    {ic:'🗂️', es:'Aplicación', en:'Application'},
+  otro:   {ic:'🔑', es:'Otro', en:'Other'}
+};
+function tipoLabel(key){ const d = TIPOS[key]||TIPOS.otro; return d.ic+' '+(getLang()==='en'? d.en : d.es); }
+
 function refreshFilters(){
   const sets = {fEmpresa:new Set(), fCiudad:new Set(), fArea:new Set()};
   vault.entries.forEach(e=>{ if(e.empresa)sets.fEmpresa.add(e.empresa); if(e.ciudad)sets.fCiudad.add(e.ciudad); if(e.area)sets.fArea.add(e.area); });
@@ -820,6 +851,7 @@ function render(){
   if(!vault) return;
   refreshFilters();
   const q = (document.getElementById('search').value||'').toLowerCase();
+  const fT = document.getElementById('fTipo').value;
   const fE = document.getElementById('fEmpresa').value;
   const fC = document.getElementById('fCiudad').value;
   const fA = document.getElementById('fArea').value;
@@ -848,12 +880,13 @@ function render(){
 
   // Lista
   let items = vault.entries.filter(e=>{
+    if(fT && (e.tipo||'otro')!==fT) return false;
     if(fE && e.empresa!==fE) return false;
     if(fC && e.ciudad!==fC) return false;
     if(fA && e.area!==fA) return false;
     if(dashFilter && statusOf(e)!==dashFilter) return false;
     if(q){
-      const hay = [e.empresa,e.ciudad,e.area,e.aplicacion,e.usuario,e.url,e.notas].join(' ').toLowerCase();
+      const hay = [e.empresa,e.ciudad,e.area,e.aplicacion,e.usuario,e.url,e.notas,tipoLabel(e.tipo)].join(' ').toLowerCase();
       if(!hay.includes(q)) return false;
     }
     return true;
@@ -906,9 +939,10 @@ function entryHTML(e){
         <button class="btn-danger btn btn-sm" onclick="delEntry('${e.id}')">🗑️</button>
       </div>`;
   }
+  const tipoIc = (TIPOS[e.tipo]||TIPOS.otro).ic;
   return `<div class="entry${open? '':' compact'}">
     <div class="entry-head" style="cursor:pointer" onclick="toggleEntry('${e.id}')">
-      <div class="info"><div class="entry-title">${esc(e.aplicacion)}</div></div>
+      <div class="info"><div class="entry-title">${tipoIc} ${esc(e.aplicacion)}</div></div>
       ${badge}<span class="chev">${open? '▾':'▸'}</span>
     </div>${det}
   </div>`;
@@ -972,6 +1006,7 @@ function openEditor(id){
   editingId = id||null;
   const e = id? findEntry(id) : null;
   document.getElementById('editorTitle').textContent = e? 'Editar credencial':'Nueva credencial';
+  document.getElementById('eTipo').value = e?.tipo||document.getElementById('fTipo').value||'otro';
   document.getElementById('eEmpresa').value = e?.empresa||document.getElementById('fEmpresa').value||'';
   document.getElementById('eCiudad').value = e?.ciudad||document.getElementById('fCiudad').value||'';
   document.getElementById('eArea').value = e?.area||document.getElementById('fArea').value||'';
@@ -1001,6 +1036,7 @@ async function saveEntry(){
   if(!g('eEmpresa')||!g('eCiudad')||!g('eApp')) return toast(t('⚠️ Empresa, ciudad y aplicación son obligatorios'));
   const now = new Date().toISOString();
   const data = {
+    tipo:document.getElementById('eTipo').value||'otro',
     empresa:g('eEmpresa'), ciudad:g('eCiudad'), area:g('eArea'), aplicacion:g('eApp'),
     usuario:g('eUser'), password:document.getElementById('ePass').value, url:g('eUrl'),
     rotationDays:parseInt(g('eRotation'))||30, warnDays:parseInt(g('eWarn'))||5,
@@ -1190,12 +1226,16 @@ const DICT = {
   'Borrar bóveda local':'Erase local vault',
   // Editor
   'Nueva credencial':'New credential','Editar credencial':'Edit credential',
-  'Organiza por empresa, ciudad y área para encontrarla rápido.':'Organize by company, city and area to find it fast.',
+  'Organiza por tipo, empresa, ciudad y área para encontrarla rápido.':'Organize by type, company, city and area to find it fast.',
   'Empresa *':'Company *','Ciudad *':'City *','Área / Sede':'Area / Site','Aplicación / Equipo *':'Application / Device *',
   'Usuario':'User','Contraseña':'Password','URL / IP (opcional)':'URL / IP (optional)',
   'Cambiar cada (días)':'Rotate every (days)','Avisar antes (días)':'Warn before (days)',
   'Último cambio de contraseña':'Last password change','Notas (opcional)':'Notes (optional)',
   'Cancelar':'Cancel','💾 Guardar':'💾 Save','Generar':'Generate',
+  // F-1: tipo de credencial
+  'Tipo de credencial':'Credential type','Tipo: todos':'Type: all','Tipo':'Type',
+  '📹 DVR / Cámara':'📹 DVR / Camera','🚨 Alarma':'🚨 Alarm','🌐 Red / Router':'🌐 Network / Router',
+  '✉️ Correo':'✉️ Email','🗂️ Aplicación':'🗂️ Application','🔑 Otro':'🔑 Other',
   // Dinámicos
   'Empresa: todas':'Company: all','Ciudad: todas':'City: all','Área: todas':'Area: all',
   'credenciales':'credentials','act.':'upd.',
@@ -1351,8 +1391,8 @@ ${p.nombre? `<div class="sub">${t('Responsable:')} ${esc(p.nombre)}${p.cargo? ' 
 ${p.mail||p.tel? `<div class="sub">${t('Contacto:')} ${esc(p.mail||'')}${p.tel? ' · '+esc(p.tel):''}</div>`:''}
 <div class="sub"><b>${t('Total:')} ${rows.length} ${t('credenciales')} · ${t('Vencidas')}: ${venc} · ${t('Por vencer_')}: ${pron} · ${t('Al día')}: ${rows.length-venc-pron}</b></div>
 <button onclick="window.print()">${t('🖨️ Imprimir / Guardar como PDF')}</button>
-<table><tr><th>${t('Empresa')}</th><th>${t('Ciudad')}</th><th>${t('Área')}</th><th>${t('Aplicación / Equipo')}</th><th>${t('Usuario')}</th><th>${t('Creada')}</th><th>${t('Último cambio')}</th><th>${t('Frecuencia')}</th><th>${t('Estado')}</th></tr>
-${rows.map(e=>`<tr><td>${esc(e.empresa)}</td><td>${esc(e.ciudad)}</td><td>${esc(e.area||'')}</td><td>${esc(e.aplicacion)}</td><td>${esc(e.usuario||'')}</td><td>${fmtD(e.createdAt)}</td><td>${fmtD(e.lastChanged||e.createdAt)}</td><td>${t('cada')} ${e.rotationDays||vault.settings.rotationDays} ${t('días')}</td><td>${stTxt[statusOf(e)]}</td></tr>`).join('')}
+<table><tr><th>${t('Tipo')}</th><th>${t('Empresa')}</th><th>${t('Ciudad')}</th><th>${t('Área')}</th><th>${t('Aplicación / Equipo')}</th><th>${t('Usuario')}</th><th>${t('Creada')}</th><th>${t('Último cambio')}</th><th>${t('Frecuencia')}</th><th>${t('Estado')}</th></tr>
+${rows.map(e=>`<tr><td>${esc(tipoLabel(e.tipo))}</td><td>${esc(e.empresa)}</td><td>${esc(e.ciudad)}</td><td>${esc(e.area||'')}</td><td>${esc(e.aplicacion)}</td><td>${esc(e.usuario||'')}</td><td>${fmtD(e.createdAt)}</td><td>${fmtD(e.lastChanged||e.createdAt)}</td><td>${t('cada')} ${e.rotationDays||vault.settings.rotationDays} ${t('días')}</td><td>${stTxt[statusOf(e)]}</td></tr>`).join('')}
 </table></body></html>`;
   const w = window.open('', '_blank');
   if(!w) return toast('⚠️ Permite ventanas emergentes para generar el informe');
