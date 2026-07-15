@@ -275,6 +275,10 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
   <div id="viewSettings" class="hidden">
 
     <div id="moreMenu">
+      <div class="menu-card" id="menuUnlock">
+        <div class="menu-title">Versión</div>
+        <div class="menu-row" onclick="showLimitModal()">🔓 Desbloquear versión completa<span class="arr">›</span></div>
+      </div>
       <div class="menu-card">
         <div class="menu-title">Cuenta</div>
         <div class="menu-row" onclick="openSection('secProfile')">👤 Mi cuenta<span class="arr">›</span></div>
@@ -545,6 +549,23 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
   </div>
 </div>
 
+<!-- ===== MODAL LÍMITE DE PRUEBA ===== -->
+<div class="modal hidden" id="limitModal">
+  <div class="modal-card" style="max-width:420px;text-align:center">
+    <div class="logo" style="margin:0 auto 12px">🔒</div>
+    <h3>Llegaste al límite de la versión de prueba</h3>
+    <p style="font-size:13.5px;color:var(--muted);margin-top:8px">La versión gratuita permite guardar hasta 5 credenciales. Para guardar credenciales ilimitadas, adquiere la versión completa de TSI Vault.</p>
+    <a class="btn" style="display:block;margin-top:16px;text-decoration:none" href="mailto:tsi.vaulsupport@gmail.com?subject=TSI%20Vault%20-%20Quiero%20la%20versi%C3%B3n%20completa&body=Hola%2C%20quiero%20adquirir%20la%20versi%C3%B3n%20completa%20de%20TSI%20Vault%20(credenciales%20ilimitadas).">📧 Quiero la versión completa</a>
+    <div style="margin-top:18px;text-align:left">
+      <label>¿Ya tienes un código de desbloqueo?</label>
+      <input id="unlockCodeInput" placeholder="Escribe tu código" autocomplete="off">
+      <button class="btn btn-sec" style="width:100%;margin-top:10px" onclick="submitUnlockCode()">Desbloquear</button>
+      <div id="unlockMsg" style="font-size:12.5px;margin-top:6px;min-height:16px"></div>
+    </div>
+    <button class="btn-sec btn" style="width:100%;margin-top:14px" onclick="closeLimitModal()">Cerrar</button>
+  </div>
+</div>
+
 <script>
 'use strict';
 /* ================================================================
@@ -553,6 +574,38 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
    ================================================================ */
 const LS_KEY = 'tsi_vault_v1';
 const PBKDF2_ITER = 600000; // I-1: reforzado (antes 310.000). decryptVault usa blob.iter, no esta constante, para no romper bóvedas ya cifradas.
+
+/* Versión de prueba: máx. FREE_ENTRY_LIMIT credenciales hasta ingresar el código de desbloqueo.
+   Se guarda el hash SHA-256 del código (no el código en texto plano) para no dejarlo a la vista en el código fuente público. */
+const FREE_ENTRY_LIMIT = 5;
+const UNLOCK_CODE_HASH = '50f147152a735b00a8b9f59bd5801c32e4d77465bc86c67e7ecfb5938bcd7444';
+async function sha256Hex(str){
+  const buf = await crypto.subtle.digest('SHA-256', enc.encode(str.trim().toUpperCase()));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function tryUnlockCode(code){
+  if(!code) return false;
+  const hash = await sha256Hex(code);
+  if(hash !== UNLOCK_CODE_HASH) return false;
+  vault.settings.unlimited = true;
+  logEv('🔓 Versión completa desbloqueada');
+  await persist();
+  return true;
+}
+function showLimitModal(){
+  document.getElementById('unlockCodeInput').value = '';
+  document.getElementById('unlockMsg').textContent = '';
+  document.getElementById('limitModal').classList.remove('hidden');
+}
+function closeLimitModal(){ document.getElementById('limitModal').classList.add('hidden'); }
+async function submitUnlockCode(){
+  const code = document.getElementById('unlockCodeInput').value;
+  const msg = document.getElementById('unlockMsg');
+  if(!code) return;
+  const ok = await tryUnlockCode(code);
+  if(ok){ closeLimitModal(); loadSettingsUI(); render(); toast('🎉 Versión completa desbloqueada'); }
+  else { msg.textContent = '❌ Código incorrecto'; msg.className = 'err'; }
+}
 let vault = null;        // datos descifrados en memoria
 let masterPw = null;     // clave maestra en memoria (solo sesión)
 let dek = null;           // C-2: llave real que cifra los datos (32 bytes), envuelta por clave maestra y por la Llave de Recuperación
@@ -907,7 +960,8 @@ function render(){
   document.getElementById('numRed').textContent=red;
   document.getElementById('numYel').textContent=yel;
   document.getElementById('numGrn').textContent=grn;
-  document.getElementById('entryCount').textContent = vault.entries.length + ' ' + t('credenciales') + ' · ' + (vault.updatedAt? t('act.')+' '+new Date(vault.updatedAt).toLocaleDateString('es-CO') : '');
+  const trialTxt = vault.settings.unlimited ? '' : (getLang()==='en' ? ` (trial, max ${FREE_ENTRY_LIMIT})` : ` (prueba, máx. ${FREE_ENTRY_LIMIT})`);
+  document.getElementById('entryCount').textContent = vault.entries.length + ' ' + t('credenciales') + trialTxt + ' · ' + (vault.updatedAt? t('act.')+' '+new Date(vault.updatedAt).toLocaleDateString('es-CO') : '');
   ['dashRed','dashYel','dashGrn'].forEach((id,i)=>{
     document.getElementById(id).classList.toggle('sel', dashFilter===['vencida','pronto','ok'][i]);
   });
@@ -1061,6 +1115,10 @@ async function delEntry(id){
 
 /* ---------- Editor ---------- */
 function openEditor(id){
+  if(!id && !vault.settings.unlimited && vault.entries.length >= FREE_ENTRY_LIMIT){
+    showLimitModal();
+    return;
+  }
   editingId = id||null;
   const e = id? findEntry(id) : null;
   document.getElementById('editorTitle').textContent = e? 'Editar credencial':'Nueva credencial';
@@ -1090,6 +1148,9 @@ function genInto(){
   document.getElementById('ePass').type='text';
 }
 async function saveEntry(){
+  if(!editingId && !vault.settings.unlimited && vault.entries.length >= FREE_ENTRY_LIMIT){
+    closeEditor(); showLimitModal(); return;
+  }
   const g = id=>document.getElementById(id).value.trim();
   if(!g('eEmpresa')||!g('eCiudad')||!g('eApp')) return toast(t('⚠️ Empresa, ciudad y aplicación son obligatorios'));
   const now = new Date().toISOString();
@@ -1178,6 +1239,7 @@ function loadSettingsUI(){
   document.getElementById('setRotation').value = vault.settings.rotationDays||30;
   document.getElementById('setWarn').value = vault.settings.warnDays||5;
   document.getElementById('setAutolock').value = vault.settings.autolockMin||5;
+  document.getElementById('menuUnlock').classList.toggle('hidden', !!vault.settings.unlimited);
   updateNotifBtn();
 }
 async function saveSettings(){
@@ -1251,6 +1313,12 @@ const DICT = {
   '📤 Compartir':'📤 Share','📤 Compartir enlace':'📤 Share link',
   'Ayuda':'Help','❓ Ayuda y soporte':'❓ Help and support','✉️ Reportar un fallo':'✉️ Report a problem',
   'Generar nueva Llave de Recuperación':'Generate new Recovery Key',
+  'Versión':'Version','🔓 Desbloquear versión completa':'🔓 Unlock full version',
+  'Llegaste al límite de la versión de prueba':'You reached the trial version limit',
+  '📧 Quiero la versión completa':'📧 I want the full version',
+  '¿Ya tienes un código de desbloqueo?':'Already have an unlock code?',
+  'Escribe tu código':'Enter your code','Desbloquear':'Unlock','Cerrar':'Close',
+  '❌ Código incorrecto':'❌ Incorrect code','🎉 Versión completa desbloqueada':'🎉 Full version unlocked',
   'Invita a alguien a probar TSI Vault. Al abrir el enlace, esa persona crea su propia bóveda cifrada con su propia clave — separada de la tuya, nadie ve los datos de nadie más.':'Invite someone to try TSI Vault. When they open the link, that person creates their own encrypted vault with their own password — separate from yours, nobody sees anyone else\'s data.',
   'Te comparto TSI Vault, el gestor de credenciales cifrado que uso.':'Sharing TSI Vault with you, the encrypted credential manager I use.',
   '🔗 Enlace copiado, pégalo donde quieras compartirlo':'🔗 Link copied, paste it wherever you want to share it',
@@ -1355,7 +1423,8 @@ const HTML_I18N = [
   ['#secHelp .set-card:nth-of-type(8) h4','☰ More'],
   ['#secHelp .set-card:nth-of-type(8) p','Your account (for reports), printable reports, appearance, Google Drive sync, manual backup, alerts and everything security-related (fingerprint, change password, Recovery Key).'],
   ['#secHelp .set-card:nth-of-type(9) h4','✉️ Found a problem?'],
-  ['#secHelp .set-card:nth-of-type(9) p','Write to us telling us what happened, on which screen, and what phone or computer you were using. Never write real passwords in the email — if you need to give an example, use made-up data.']
+  ['#secHelp .set-card:nth-of-type(9) p','Write to us telling us what happened, on which screen, and what phone or computer you were using. Never write real passwords in the email — if you need to give an example, use made-up data.'],
+  ['#limitModal p','The free version lets you save up to 5 credentials. To save unlimited credentials, get the full version of TSI Vault.']
 ];
 function applyLang(){
   if(getLang() !== 'en') return;
