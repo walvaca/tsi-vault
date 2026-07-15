@@ -289,6 +289,10 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
         <div class="menu-row" onclick="openSection('secSec')">🔐 Seguridad<span class="arr">›</span></div>
       </div>
       <div class="menu-card">
+        <div class="menu-title">Ayuda</div>
+        <div class="menu-row" onclick="openSection('secHelp')">❓ Ayuda y soporte<span class="arr">›</span></div>
+      </div>
+      <div class="menu-card">
         <div class="menu-title">Acerca de</div>
         <div class="menu-row" onclick="openSection('secAbout')">ℹ️ TSI Vault<span class="arr">›</span></div>
       </div>
@@ -314,6 +318,43 @@ input[type=range]{padding:0;height:26px;accent-color:var(--accent)}
         <h4>📊 Informe de credenciales y vencimientos</h4>
         <p>Genera un informe imprimible con el estado de todas las credenciales, encabezado con tus datos de "Mi cuenta". <b>No incluye contraseñas.</b> En la ventana que se abre, usa el botón Imprimir para guardarlo como PDF.</p>
         <button class="btn" onclick="genReport()">Generar informe</button>
+      </div>
+    </div>
+
+    <div id="secHelp" class="hidden">
+      <div class="sec-head" onclick="backToMenu()">‹ Volver</div>
+      <div class="set-card">
+        <h4>🔓 Desbloqueo</h4>
+        <p>Entra con tu clave maestra. Si la olvidas, escribe en el mismo campo tu <b>Llave de Recuperación</b> — te dejará entrar y crear una clave nueva. La huella digital se activa por dispositivo en Más → Seguridad.</p>
+      </div>
+      <div class="set-card">
+        <h4>🗂️ Credenciales</h4>
+        <p>Toca <b>＋</b> para agregar una. Toca una tarjeta de la lista para ver usuario, contraseña y notas. Organízalas por tipo (DVR, alarma, red…), empresa, ciudad y área para encontrarlas rápido.</p>
+      </div>
+      <div class="set-card">
+        <h4>🔴🟡🟢 Estado de vencimiento</h4>
+        <p>Rojo = vencida, amarillo = por vencer pronto, verde = al día. Toca cualquiera de los tres arriba de la pantalla principal para filtrar solo esas.</p>
+      </div>
+      <div class="set-card">
+        <h4>🔍 Buscar y filtrar</h4>
+        <p>El buscador y los filtros de Tipo, Empresa, Ciudad y Área están arriba de la lista — se pueden combinar entre sí.</p>
+      </div>
+      <div class="set-card">
+        <h4>⚡ Generador</h4>
+        <p>Crea contraseñas seguras al instante. Ajusta la longitud y qué tipo de caracteres incluir — útil cuando un equipo viejo (como algunos DVR) no acepta símbolos.</p>
+      </div>
+      <div class="set-card">
+        <h4>📜 Actividad</h4>
+        <p>Un registro de cada cambio que has hecho en tu bóveda, con fecha y hora — útil para auditar qué pasó y cuándo.</p>
+      </div>
+      <div class="set-card">
+        <h4>☰ Más</h4>
+        <p>Tu cuenta (para los informes), informes imprimibles, apariencia, sincronización con Google Drive, respaldo manual, alertas y todo lo de seguridad (huella, cambiar clave, Llave de Recuperación).</p>
+      </div>
+      <div class="set-card">
+        <h4>✉️ ¿Encontraste un problema?</h4>
+        <p>Escríbenos contando qué pasó, en qué pantalla, y en qué celular o computador estabas. <b>Nunca escribas contraseñas reales en el correo</b> — si necesitas dar un ejemplo, usa datos inventados.</p>
+        <a class="btn btn-sec" style="display:block;text-align:center;text-decoration:none" href="mailto:tsi.vaulsupport@gmail.com?subject=TSI%20Vault%20-%20Reporte%20de%20fallo&body=Describe%20aqu%C3%AD%20qu%C3%A9%20pas%C3%B3%2C%20en%20qu%C3%A9%20pantalla%2C%20y%20en%20qu%C3%A9%20dispositivo%2Fnavegador%20estabas.%0A%0A(No%20escribas%20contrase%C3%B1as%20reales%20aqu%C3%AD)">✉️ Reportar un fallo</a>
       </div>
     </div>
 
@@ -1208,6 +1249,8 @@ const DICT = {
   '💾 Respaldo manual (.tsi)':'💾 Manual backup (.tsi)','🔔 Alertas y tiempos':'🔔 Alerts & timing',
   '🔐 Seguridad':'🔐 Security','ℹ️ TSI Vault':'ℹ️ TSI Vault','‹ Volver':'‹ Back',
   '📤 Compartir':'📤 Share','📤 Compartir enlace':'📤 Share link',
+  'Ayuda':'Help','❓ Ayuda y soporte':'❓ Help and support','✉️ Reportar un fallo':'✉️ Report a problem',
+  'Generar nueva Llave de Recuperación':'Generate new Recovery Key',
   'Invita a alguien a probar TSI Vault. Al abrir el enlace, esa persona crea su propia bóveda cifrada con su propia clave — separada de la tuya, nadie ve los datos de nadie más.':'Invite someone to try TSI Vault. When they open the link, that person creates their own encrypted vault with their own password — separate from yours, nobody sees anyone else\'s data.',
   'Te comparto TSI Vault, el gestor de credenciales cifrado que uso.':'Sharing TSI Vault with you, the encrypted credential manager I use.',
   '🔗 Enlace copiado, pégalo donde quieras compartirlo':'🔗 Link copied, paste it wherever you want to share it',
@@ -1279,19 +1322,40 @@ const DICT = {
   'Último cambio':'Last change','Frecuencia':'Frequency','Estado':'Status','cada':'every',
   '🖨️ Imprimir / Guardar como PDF':'🖨️ Print / Save as PDF','Por vencer_':'Due soon'
 };
-/* Traducciones de párrafos largos (por selector) */
+/* Traducciones de párrafos largos (por selector).
+   OJO: dentro de cada sección, el primer div hijo siempre es ".sec-head" (el botón
+   "‹ Volver"), así que la primera ".set-card" real es :nth-of-type(2), no (1) —
+   nth-of-type cuenta TODOS los div hermanos, no solo los que tienen esa clase. */
 const HTML_I18N = [
   ['#setupForm div[style*="margin-top:14px"]','⚠️ <b>Important:</b> the master password is NOT stored anywhere and CANNOT be recovered. If you forget it, your data cannot be opened. Memorize it well.'],
   ['#secSync .set-card > p:last-of-type','With this, the app automatically uploads/downloads your encrypted vault (file <b>TSI-Vault-sync.tsi</b> in your Drive) when unlocking and after every change. Use the same master password on all your devices.'],
   ['#secReport .set-card p','Generates a printable report with the status of all credentials, headed with your "My account" details. <b>It does not include passwords.</b> In the window that opens, use the Print button to save it as PDF.'],
-  ['#secSec .set-card:nth-of-type(1) p','Use this device\'s biometrics (fingerprint or face) to unlock without typing the master password. Configured per device — enable it on your phone and PC separately.'],
-  ['#secBackup .set-card:nth-of-type(1) p','Downloads a <b>.tsi</b> file encrypted with AES-256. Upload it to your Google Drive or OneDrive. Without your master password the file is unreadable to anyone.'],
-  ['#secBackup .set-card:nth-of-type(2) p','Open a .tsi file from Drive on another device. Replaces this device\'s current data.'],
-  ['#secAlerts .set-card:nth-of-type(1) p','Get a notification when opening the app if any credentials are expired or due soon.'],
-  ['#secSec .set-card:nth-of-type(3) p','Removes the vault from this browser. Export your .tsi backup first.'],
+  ['#secSec .set-card:nth-of-type(2) p','Use this device\'s biometrics (fingerprint or face) to unlock without typing the master password. Configured per device — enable it on your phone and PC separately.'],
+  ['#secSec .set-card:nth-of-type(4) h4','🗝️ Recovery Key'],
+  ['#secSec .set-card:nth-of-type(4) p','For security, we don\'t keep it anywhere after showing it to you once — if you lost it or never saved it, generate a new one (this invalidates the previous one).'],
+  ['#secSec .set-card:nth-of-type(5) p','Removes the vault from this browser. Export your .tsi backup first.'],
+  ['#secBackup .set-card:nth-of-type(2) p','Downloads a <b>.tsi</b> file encrypted with AES-256. Upload it to your Google Drive or OneDrive. Without your master password the file is unreadable to anyone.'],
+  ['#secBackup .set-card:nth-of-type(3) p','Open a .tsi file from Drive on another device. Replaces this device\'s current data.'],
+  ['#secAlerts .set-card:nth-of-type(2) p','Get a notification when opening the app if any credentials are expired or due soon.'],
   ['#viewGen .set-card p','Many older DVRs limit passwords to 8–32 characters and some reject symbols. If a device rejects the password, disable "Symbols" and generate again. Always use a different password per device.'],
   ['#viewGen .set-card h4','💡 Tip for your Dahua DVRs and alarm panels'],
-  ['#secProfile .set-card p','Details of the person responsible for these credentials. Stored encrypted and used as the report letterhead.']
+  ['#secProfile .set-card p','Details of the person responsible for these credentials. Stored encrypted and used as the report letterhead.'],
+  ['#secHelp .set-card:nth-of-type(2) h4','🔓 Unlocking'],
+  ['#secHelp .set-card:nth-of-type(2) p','Sign in with your master password. If you forget it, type your Recovery Key in the same field — it will let you in and create a new password. Fingerprint unlock is enabled per device in More → Security.'],
+  ['#secHelp .set-card:nth-of-type(3) h4','🗂️ Credentials'],
+  ['#secHelp .set-card:nth-of-type(3) p','Tap ＋ to add one. Tap a card in the list to see the user, password and notes. Organize them by type (DVR, alarm, network…), company, city and area to find them fast.'],
+  ['#secHelp .set-card:nth-of-type(4) h4','🔴🟡🟢 Expiry status'],
+  ['#secHelp .set-card:nth-of-type(4) p','Red = expired, yellow = due soon, green = up to date. Tap any of the three at the top of the main screen to filter by that status.'],
+  ['#secHelp .set-card:nth-of-type(5) h4','🔍 Search and filter'],
+  ['#secHelp .set-card:nth-of-type(5) p','The search box and the Type, Company, City and Area filters are above the list — you can combine them.'],
+  ['#secHelp .set-card:nth-of-type(6) h4','⚡ Generator'],
+  ['#secHelp .set-card:nth-of-type(6) p','Create strong passwords instantly. Adjust the length and which character types to include — useful when an older device (like some DVRs) doesn\'t accept symbols.'],
+  ['#secHelp .set-card:nth-of-type(7) h4','📜 Activity'],
+  ['#secHelp .set-card:nth-of-type(7) p','A log of every change you\'ve made in your vault, with date and time — useful for auditing what happened and when.'],
+  ['#secHelp .set-card:nth-of-type(8) h4','☰ More'],
+  ['#secHelp .set-card:nth-of-type(8) p','Your account (for reports), printable reports, appearance, Google Drive sync, manual backup, alerts and everything security-related (fingerprint, change password, Recovery Key).'],
+  ['#secHelp .set-card:nth-of-type(9) h4','✉️ Found a problem?'],
+  ['#secHelp .set-card:nth-of-type(9) p','Write to us telling us what happened, on which screen, and what phone or computer you were using. Never write real passwords in the email — if you need to give an example, use made-up data.']
 ];
 function applyLang(){
   if(getLang() !== 'en') return;
@@ -1344,7 +1408,7 @@ function markLookUI(){
   const lg = document.getElementById('lookLang'); if(lg) lg.value = getLang();
 }
 /* ---------- Navegación del menú Más ---------- */
-const SECTIONS = ['secProfile','secReport','secLook','secSync','secBackup','secAlerts','secSec','secAbout'];
+const SECTIONS = ['secProfile','secReport','secLook','secSync','secBackup','secAlerts','secSec','secHelp','secAbout'];
 function openSection(id){
   document.getElementById('moreMenu').classList.add('hidden');
   SECTIONS.forEach(s=>document.getElementById(s).classList.toggle('hidden', s!==id));
